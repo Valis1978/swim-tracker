@@ -1,4 +1,5 @@
 import Nav from "@/components/Nav";
+import Confetti from "@/components/Confetti";
 import Sparkline from "@/components/Sparkline";
 import { getPrimary, getResults, getBadges, getUpcomingCompetitions, personalBests } from "@/lib/queries";
 import { getRole } from "@/lib/auth";
@@ -6,7 +7,8 @@ import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function VikiPage() {
+export default async function VikiPage({ searchParams }: { searchParams: Promise<{ slavime?: string }> }) {
+  const { slavime } = await searchParams;
   const role = (await getRole()) ?? "kid";
   const primary = await getPrimary();
   if (!primary) {
@@ -44,6 +46,29 @@ export default async function VikiPage() {
   }
   journey.sort((x, y) => y.gain - x.gain);
 
+  // fresh personal bests: newest race day results that equal the PB, within 3 days
+  const freshPBs: { disc: string; timeMs: number; improvedBy: number | null }[] = [];
+  if (lastRaceDay) {
+    const ageDays = (Date.now() - +new Date(lastRaceDay)) / 86400_000;
+    if (ageDays <= 3 || slavime) {
+      for (const r of lastRace) {
+        const best = pbs.get(r.discipline) ?? pbs50.get(r.discipline);
+        if (!best || best.swim_date !== r.swim_date || best.time_ms !== r.time_ms) continue;
+        const prev = finals
+          .filter((x) => x.discipline === r.discipline && x.pool_length === r.pool_length && x.swim_date < r.swim_date)
+          .reduce((m, x) => Math.min(m, x.time_ms), Infinity);
+        if (prev === Infinity) continue; // first-ever swim, not a beaten PB
+        freshPBs.push({ disc: r.discipline, timeMs: r.time_ms, improvedBy: (prev - r.time_ms) / 1000 });
+      }
+    }
+  }
+  const demo = Boolean(slavime) && freshPBs.length === 0;
+  if (demo) {
+    const top = [...pbs.entries()][0];
+    if (top) freshPBs.push({ disc: top[0], timeMs: top[1].time_ms, improvedBy: 0.55 });
+  }
+  const celebrate = freshPBs.length > 0;
+
   // per-discipline 25m series for sparklines
   const series = new Map<string, number[]>();
   for (const r of finals.filter((x) => x.pool_length === 25).sort((a, b) => a.swim_date.localeCompare(b.swim_date))) {
@@ -53,6 +78,21 @@ export default async function VikiPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
+      {celebrate && <Confetti />}
+      {celebrate && (
+        <section className="rounded-3xl bg-gradient-to-br from-medal to-coral text-white p-5 shadow-lg">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/80">{demo ? "ukázka oslavy" : "to je ono!"}</p>
+          <h2 className="text-2xl font-bold mt-1">🎉 NOVÝ OSOBÁK!</h2>
+          {freshPBs.map((p) => (
+            <p key={p.disc} className="mt-1 text-white/95 font-semibold">
+              {disciplineLabel(p.disc)} — {fmtTime(p.timeMs)}
+              {p.improvedBy != null && p.improvedBy > 0 && (
+                <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-sm">o {p.improvedBy.toFixed(2).replace(".", ",")} s rychleji!</span>
+              )}
+            </p>
+          ))}
+        </section>
+      )}
       <header className="rounded-3xl bg-gradient-to-br from-pool-500 to-pool-700 text-white p-6 relative overflow-hidden">
         <div className="absolute -right-4 -top-4 text-8xl opacity-20 float">🌊</div>
         <p className="text-pool-100 text-sm font-medium">ahoj, tady plave</p>

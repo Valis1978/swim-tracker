@@ -1,5 +1,5 @@
 import Nav from "@/components/Nav";
-import { getUpcomingCompetitions, getRecentResults } from "@/lib/queries";
+import { getUpcomingCompetitions, getRecentResults, getSwimmers } from "@/lib/queries";
 import { getRole } from "@/lib/auth";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 
 export default async function ZavodyPage() {
   const role = (await getRole()) ?? "kid";
-  const [upcoming, recent] = await Promise.all([getUpcomingCompetitions(), getRecentResults(200)]);
+  const [upcoming, recent, swimmers] = await Promise.all([getUpcomingCompetitions(), getRecentResults(200), getSwimmers()]);
+  const byCsps = new Map(swimmers.map((s) => [String(s.csps_user_id), s]));
+  const STATUS_LABEL = { accepted: "", reserve: " (pod čarou)", entered: "" } as const;
 
   // group past results by competition day
   const byDay = new Map<string, typeof recent>();
@@ -32,6 +34,21 @@ export default async function ZavodyPage() {
             <div key={c.csps_id} className="rounded-2xl bg-medal/10 border border-medal/40 px-4 py-3">
               <p className="font-semibold text-pool-900">{c.title}</p>
               <p className="text-sm text-pool-900/60">{fmtDate(c.start_date)} · {c.location}</p>
+              {c.entries && (
+                <div className="mt-2 flex flex-col gap-1">
+                  {Object.entries(c.entries).map(([uid, list]) => {
+                    const s = byCsps.get(uid);
+                    if (!s) return null;
+                    return (
+                      <p key={uid} className="text-xs text-pool-900/70">
+                        <span className="font-semibold">{s.is_primary ? "⭐ " : ""}{s.first_name} {s.last_name}:</span>{" "}
+                        {list.map((e) => disciplineLabel(e.disc) + STATUS_LABEL[e.status]).join(", ")}
+                        {!c.has_startlist && <span className="text-pool-900/40"> · přihlášky (rozlosování zatím není)</span>}
+                      </p>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ))}
         </div>

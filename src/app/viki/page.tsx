@@ -23,11 +23,13 @@ export default async function VikiPage() {
     getUpcomingCompetitions(),
   ]);
   const finals = results.filter((r) => !r.is_split && !r.is_dsq);
-  const pbs = personalBests(results);
+  const pbs = personalBests(results, 25);
+  const pbs50 = personalBests(results, 50);
   const raceDays = [...new Set(finals.map((r) => r.swim_date))].sort();
   const lastRaceDay = raceDays[raceDays.length - 1];
   const lastRace = finals.filter((r) => r.swim_date === lastRaceDay);
-  const nextComp = upcoming[0];
+  const nextComp = upcoming.find((u) => u.entries && u.entries[String(primary.csps_user_id)]) ?? null;
+  const nextEntries = nextComp?.entries?.[String(primary.csps_user_id)] ?? [];
 
   // per-discipline 25m series for sparklines
   const series = new Map<string, number[]>();
@@ -57,6 +59,11 @@ export default async function VikiPage() {
             <p className="text-sm text-pool-900/70">
               {fmtDate(nextComp.start_date)} · {nextComp.location}
             </p>
+            {nextEntries.length > 0 && (
+              <p className="text-xs text-pool-900/60 mt-1">
+                poplave: {nextEntries.filter((e) => e.status !== "reserve").map((e) => disciplineLabel(e.disc)).join(", ") || "—"}
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -68,7 +75,10 @@ export default async function VikiPage() {
             <div key={disc} className="rounded-2xl bg-white p-4 shadow-sm border border-pool-100 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(disc)}</p>
-                <p className="text-3xl font-bold text-pool-900 mt-0.5">{fmtTime(r.time_ms)}</p>
+                <p className="text-3xl font-bold text-pool-900 mt-0.5">
+                  {fmtTime(r.time_ms)}
+                  {r.points != null && <span className="ml-2 text-sm font-semibold text-pool-400">{r.points} b.</span>}
+                </p>
                 <p className="text-xs text-pool-900/50 mt-0.5">{fmtDate(r.swim_date)} · {r.location}</p>
               </div>
               {(series.get(disc)?.length ?? 0) >= 2 && <Sparkline values={series.get(disc)!} />}
@@ -77,6 +87,24 @@ export default async function VikiPage() {
           {pbs.size === 0 && <p className="text-pool-900/50 text-sm">Zatím žádné časy — po prvním závodě se tu objeví.</p>}
         </div>
       </section>
+
+      {pbs50.size > 0 && (
+        <section>
+          <h2 className="text-xl font-bold text-pool-800 mb-3">Dlouhý bazén (50m)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[...pbs50.entries()].map(([disc, r]) => (
+              <div key={disc} className="rounded-2xl bg-white p-4 shadow-sm border border-pool-100">
+                <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(disc)}</p>
+                <p className="text-2xl font-bold text-pool-900 mt-0.5">
+                  {fmtTime(r.time_ms)}
+                  {r.points != null && <span className="ml-2 text-sm font-semibold text-pool-400">{r.points} b.</span>}
+                </p>
+                <p className="text-xs text-pool-900/50 mt-0.5">{fmtDate(r.swim_date)} · {r.location}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {badges.length > 0 && (
         <section>

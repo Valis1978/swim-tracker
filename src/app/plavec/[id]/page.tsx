@@ -16,7 +16,8 @@ export default async function PlavecPage({ params }: { params: Promise<{ id: str
 
   const results = await getResults(swimmer.id);
   const finals = results.filter((r) => !r.is_split && !r.is_dsq);
-  const pbs = personalBests(results);
+  const pbs = personalBests(results, 25);
+  const pbs50 = personalBests(results, 50);
   const raceDays = [...new Set(finals.map((r) => r.swim_date))].sort();
 
   const series = new Map<string, number[]>();
@@ -52,7 +53,10 @@ export default async function PlavecPage({ params }: { params: Promise<{ id: str
             <div key={disc} className="rounded-2xl bg-white p-4 shadow-sm border border-pool-100 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(disc)}</p>
-                <p className="text-2xl font-bold text-pool-900 mt-0.5">{fmtTime(r.time_ms)}</p>
+                <p className="text-2xl font-bold text-pool-900 mt-0.5">
+                  {fmtTime(r.time_ms)}
+                  {r.points != null && <span className="ml-2 text-xs font-semibold text-pool-400">{r.points} b.</span>}
+                </p>
                 <p className="text-xs text-pool-900/50 mt-0.5">{fmtDate(r.swim_date)}</p>
               </div>
               {(series.get(disc)?.length ?? 0) >= 2 && <Sparkline values={series.get(disc)!} width={90} />}
@@ -61,6 +65,21 @@ export default async function PlavecPage({ params }: { params: Promise<{ id: str
           {pbs.size === 0 && <p className="text-sm text-pool-900/50">Žádné výsledky v 25m bazénu.</p>}
         </div>
       </section>
+
+      {pbs50.size > 0 && (
+        <section>
+          <h2 className="text-lg font-bold text-pool-800 mb-2">Dlouhý bazén (50m)</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {[...pbs50.entries()].map(([disc, r]) => (
+              <div key={disc} className="rounded-2xl bg-white p-3 shadow-sm border border-pool-100">
+                <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(disc)}</p>
+                <p className="text-xl font-bold text-pool-900">{fmtTime(r.time_ms)}</p>
+                <p className="text-xs text-pool-900/50">{fmtDate(r.swim_date)}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="text-lg font-bold text-pool-800 mb-2">Historie závodů</h2>

@@ -59,29 +59,37 @@ export async function getBadges(swimmerId: string): Promise<Badge[]> {
   return (data ?? []) as Badge[];
 }
 
+export interface UpcomingEntry {
+  disc: string;
+  status: "accepted" | "reserve" | "entered";
+  seed: number | null;
+}
+
 export interface Upcoming {
   csps_id: number;
   title: string;
   location: string | null;
   start_date: string;
+  entries: Record<string, UpcomingEntry[]> | null;
+  has_startlist: boolean;
 }
 
 export async function getUpcomingCompetitions(): Promise<Upcoming[]> {
   const today = new Date().toISOString().slice(0, 10);
   const { data } = await db()
     .from("swim_competitions")
-    .select("csps_id,title,location,start_date")
+    .select("csps_id,title,location,start_date,entries,has_startlist")
     .gte("start_date", today)
     .order("start_date")
     .limit(10);
   return (data ?? []) as Upcoming[];
 }
 
-// Personal bests per discipline for 25m, finals only
-export function personalBests(results: Result[]): Map<string, Result> {
+// Personal bests per discipline for a given pool length, finals only
+export function personalBests(results: Result[], pool: number = 25): Map<string, Result> {
   const pb = new Map<string, Result>();
   for (const r of results) {
-    if (r.is_split || r.is_dsq || r.pool_length !== 25) continue;
+    if (r.is_split || r.is_dsq || r.pool_length !== pool) continue;
     const cur = pb.get(r.discipline);
     if (!cur || r.time_ms < cur.time_ms) pb.set(r.discipline, r);
   }

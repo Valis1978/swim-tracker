@@ -124,3 +124,87 @@ export function seasonStart(today = new Date()): string {
   const y = today.getMonth() + 1 >= 9 ? today.getFullYear() : today.getFullYear() - 1;
   return `${y}-09-01`;
 }
+
+export interface CspsCompetitionRow {
+  competitionId: number;
+  title: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  poolLength: number;
+  sport: number;
+  masters: boolean;
+  hasResults: boolean;
+}
+
+export async function getCompetitions(year: number): Promise<CspsCompetitionRow[]> {
+  return get("/competitions", { year });
+}
+
+export interface CspsApplicationEntry {
+  userId: number;
+  disciplineCode: string;
+  disciplineTitle: string;
+  overLimit: boolean;
+  qualificationTime: number | null;
+  date: string;
+}
+
+// All individual entries of a competition (pre-race applications, exact userId match)
+export async function getApplicationEntries(competitionId: number): Promise<CspsApplicationEntry[]> {
+  const d = await get<{
+    halfDays: { date: string; competitionCategories: { disciplineCode: string; disciplineTitle: string; applications: { userId: number; overLimit: boolean; qualificationTime: number | null }[] }[] }[];
+  }>(`/competitions/${competitionId}/applications`);
+  const out: CspsApplicationEntry[] = [];
+  for (const h of d.halfDays ?? []) {
+    for (const c of h.competitionCategories ?? []) {
+      for (const a of c.applications ?? []) {
+        out.push({
+          userId: a.userId,
+          disciplineCode: c.disciplineCode,
+          disciplineTitle: c.disciplineTitle,
+          overLimit: a.overLimit,
+          qualificationTime: a.qualificationTime,
+          date: h.date,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export interface StartListRow {
+  discipline: string;
+  lastName: string;
+  firstName: string;
+  birthYear: string;
+  club: string;
+  heat: number;
+  lane: number;
+}
+
+// OMEGA start list (after withdrawals): heat > 0 = seeded/accepted, heat 0 = reserve
+export async function getStartList(competitionId: number): Promise<StartListRow[] | null> {
+  const docs = await get<{ documents: { type: string; fileName: string }[] }>(`/competitions/${competitionId}/documents`);
+  const sl = (docs.documents ?? []).find((x) => x.type === "START_LIST_CSV");
+  if (!sl) return null;
+  const url = `${BASE}/competitions/${competitionId}/documents/${encodeURIComponent(sl.type)}?fileName=${encodeURIComponent(sl.fileName)}`;
+  const res = await fetch(url, { headers: { "User-Agent": UA }, cache: "no-store" });
+  if (!res.ok) return null;
+  const text = new TextDecoder("windows-1250").decode(await res.arrayBuffer());
+  const rows: StartListRow[] = [];
+  for (const line of text.split("\n")) {
+    const parts = line.trim().split(";");
+    if (parts.length < 13 || !/^\d+$/.test(parts[0])) continue;
+    rows.push({
+      discipline: parts[1].replaceAll('"', ""),
+      lastName: parts[3].replaceAll('"', ""),
+      firstName: parts[4].replaceAll('"', ""),
+      birthYear: parts[5].replaceAll('"', ""),
+      club: parts[7].replaceAll('"', ""),
+      heat: parseInt(parts[10]) || 0,
+      lane: parseInt(parts[11]) || 0,
+    });
+  }
+  return rows;
+}

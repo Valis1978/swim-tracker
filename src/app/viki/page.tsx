@@ -31,6 +31,19 @@ export default async function VikiPage() {
   const nextComp = upcoming.find((u) => u.entries && u.entries[String(primary.csps_user_id)]) ?? null;
   const nextEntries = nextComp?.entries?.[String(primary.csps_user_id)] ?? [];
 
+  // "Moje cesta": first race result -> personal best per discipline (same pool as the PB)
+  const journey: { disc: string; firstMs: number; bestMs: number; gain: number }[] = [];
+  for (const [disc, best] of pbs) {
+    const sameDisc = finals
+      .filter((r) => r.discipline === disc && r.pool_length === best.pool_length)
+      .sort((x, y) => x.swim_date.localeCompare(y.swim_date));
+    if (sameDisc.length < 2) continue;
+    const first = sameDisc[0];
+    const gain = (first.time_ms - best.time_ms) / 1000;
+    if (gain > 0.005) journey.push({ disc, firstMs: first.time_ms, bestMs: best.time_ms, gain });
+  }
+  journey.sort((x, y) => y.gain - x.gain);
+
   // per-discipline 25m series for sparklines
   const series = new Map<string, number[]>();
   for (const r of finals.filter((x) => x.pool_length === 25).sort((a, b) => a.swim_date.localeCompare(b.swim_date))) {
@@ -103,6 +116,28 @@ export default async function VikiPage() {
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {journey.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold text-pool-800 mb-3">Moje cesta 🛤️</h2>
+          <div className="flex flex-col gap-2">
+            {journey.map((j) => (
+              <div key={j.disc} className="rounded-2xl bg-white border border-pool-100 shadow-sm px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(j.disc)}</p>
+                  <p className="text-sm text-pool-900/70 mt-0.5">
+                    {fmtTime(j.firstMs)} <span className="text-pool-400">→</span> <b className="text-pool-900">{fmtTime(j.bestMs)}</b>
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-bold px-3 py-1.5">
+                  −{j.gain.toFixed(1).replace(".", ",")} s {j.gain >= 5 ? "🚀" : j.gain >= 2 ? "⚡" : "💪"}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-pool-900/40 mt-2">Od tvého úplně prvního startu k osobáku.</p>
         </section>
       )}
 

@@ -7,6 +7,7 @@ const TABS = [
   { href: "/prehled", label: "Žebříček" },
   { href: "/prehled/srovnani", label: "Srovnání" },
   { href: "/prehled/forma", label: "Forma" },
+  { href: "/prehled/duel", label: "Duel" },
 ];
 
 export default function PrehledTabs() {

@@ -1,6 +1,6 @@
-# swim-tracker — Plavání · Valentovi
+# swim-tracker — Plavání
 
-Family PWA tracking Viki's swimming results, CZ rankings and races. Data from the public CSPS portal (vysledky.czechswimming.cz), cached in Supabase, synced daily.
+Private PWA tracking a young swimmer's results, CZ rankings and races. Data from the public CSPS portal (vysledky.czechswimming.cz), cached in Supabase, synced daily.
 
 ## Env
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Valis1978 project, `swim_*` tables

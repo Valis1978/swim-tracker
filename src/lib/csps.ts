@@ -1,7 +1,7 @@
 // Client for the public (undocumented) CSPS portal REST API.
 // Be polite: low frequency, throttled, identified UA, cache everything in our DB.
 const BASE = "https://vysledky.czechswimming.cz/cz.zma.csps.portal.rest/api/public";
-const UA = "swim-tracker-family-app/1.0 (vlastimil.valenta@gmail.com)";
+const UA = "swim-tracker/1.0 (vlastimil.valenta@gmail.com)";
 
 const THROTTLE_MS = 350;
 let lastCall = 0;

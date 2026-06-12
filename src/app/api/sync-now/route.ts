@@ -6,7 +6,7 @@ import { runSync } from "@/lib/sync";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-// Manual sync from the settings screen — authenticated by family PIN cookie
+// Manual sync from the settings screen — authenticated by app PIN cookie
 export async function POST() {
   const c = await cookies();
   if (c.get(AUTH_COOKIE)?.value !== authToken()) {

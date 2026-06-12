@@ -58,7 +58,7 @@ export default function PinPage() {
     <main className="min-h-dvh flex flex-col items-center justify-center gap-6 px-6 bg-gradient-to-b from-pool-100 to-pool-50">
       <div className="text-6xl float">🏊‍♀️</div>
       <h1 className="text-3xl font-bold text-pool-800">Plavání</h1>
-      <p className="text-pool-900/60 text-sm">Rodinná appka — zadej PIN</p>
+      <p className="text-pool-900/60 text-sm">Zadej PIN</p>
       <Suspense>
         <PinForm />
       </Suspense>

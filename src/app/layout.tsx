@@ -13,8 +13,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Plavání · Valentovi",
-  description: "Vikiny plavecké výsledky, pokroky a závody",
+  title: "Plavání",
+  description: "Plavecké výsledky, pokroky a závody",
   manifest: "/manifest.json",
   robots: { index: false, follow: false },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Plavání" },

@@ -1,7 +1,7 @@
 {
-  "name": "Plavání · Valentovi",
+  "name": "Plavání",
   "short_name": "Plavání",
-  "description": "Vikiny plavecké výsledky, pokroky a závody",
+  "description": "Plavecké výsledky, pokroky a závody",
   "start_url": "/viki",
   "display": "standalone",
   "background_color": "#eefafd",

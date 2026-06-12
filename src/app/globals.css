@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-pool-50: #eefafd;
+  --color-pool-100: #d6f3fa;
+  --color-pool-200: #aee6f5;
+  --color-pool-300: #6fd2ec;
+  --color-pool-400: #2cb5da;
+  --color-pool-500: #0e97bf;
+  --color-pool-600: #0879a0;
+  --color-pool-700: #0a6182;
+  --color-pool-800: #0e506b;
+  --color-pool-900: #11435b;
+  --color-pool-950: #082a3c;
+  --color-medal: #f5a623;
+  --color-coral: #ff6b5e;
+  --font-display: var(--font-bricolage);
+  --font-body: var(--font-inter);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
+  background: var(--color-pool-50);
+  color: var(--color-pool-950);
+}
+
+h1, h2, h3, .display {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float { animation: float 3.5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .float { animation: none; }
 }

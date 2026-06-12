@@ -3,19 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
+const PARENT_TABS = [
   { href: "/viki", label: "Viki", emoji: "🏊‍♀️" },
   { href: "/prehled", label: "Přehled", emoji: "📊" },
   { href: "/zavody", label: "Závody", emoji: "🏁" },
   { href: "/nastaveni", label: "Nastavení", emoji: "⚙️" },
 ];
 
-export default function Nav() {
+const KID_TABS = [
+  { href: "/viki", label: "Moje plavání", emoji: "🏊‍♀️" },
+  { href: "/zavody", label: "Závody", emoji: "🏁" },
+];
+
+export default function Nav({ role = "parent" }: { role?: "parent" | "kid" }) {
   const pathname = usePathname();
+  const tabs = role === "kid" ? KID_TABS : PARENT_TABS;
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur border-t border-pool-100 pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto max-w-3xl grid grid-cols-4">
-        {TABS.map((t) => {
+      <div className={`mx-auto max-w-3xl grid ${tabs.length === 2 ? "grid-cols-2" : "grid-cols-4"}`}>
+        {tabs.map((t) => {
           const active = pathname.startsWith(t.href);
           return (
             <Link

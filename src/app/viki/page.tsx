@@ -1,17 +1,19 @@
 import Nav from "@/components/Nav";
 import Sparkline from "@/components/Sparkline";
 import { getPrimary, getResults, getBadges, getUpcomingCompetitions, personalBests } from "@/lib/queries";
+import { getRole } from "@/lib/auth";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function VikiPage() {
+  const role = (await getRole()) ?? "kid";
   const primary = await getPrimary();
   if (!primary) {
     return (
       <main className="min-h-dvh flex items-center justify-center p-8 text-center text-pool-900/60">
         Zatím tu nikdo neplave — přidej plavce v Nastavení a spusť synchronizaci.
-        <Nav />
+        <Nav role={role} />
       </main>
     );
   }
@@ -110,7 +112,7 @@ export default async function VikiPage() {
       <p className="text-center text-xs text-pool-900/40 pb-2">
         Každý start se počítá. Plav si svoje. 💙
       </p>
-      <Nav />
+      <Nav role={role} />
     </main>
   );
 }

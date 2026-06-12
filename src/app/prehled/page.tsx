@@ -1,4 +1,6 @@
+import Link from "next/link";
 import Nav from "@/components/Nav";
+import PrehledTabs from "@/components/PrehledTabs";
 import { getPrimary, getLatestSnapshots, getPreviousSnapshots, getSwimmers, getRecentResults } from "@/lib/queries";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
@@ -26,6 +28,7 @@ export default async function PrehledPage() {
           </p>
         )}
       </header>
+      <PrehledTabs />
 
       <section className="rounded-2xl bg-white border border-pool-100 shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
@@ -73,13 +76,13 @@ export default async function PrehledPage() {
         <h2 className="text-lg font-bold text-pool-800 mb-2">Sledovaní plavci ({swimmers.length})</h2>
         <div className="rounded-2xl bg-white border border-pool-100 shadow-sm divide-y divide-pool-50">
           {swimmers.map((s) => (
-            <div key={s.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
+            <Link key={s.id} href={`/plavec/${s.id}`} className="px-4 py-2.5 flex items-center justify-between text-sm hover:bg-pool-50 transition-colors">
               <span className="font-medium text-pool-900">
                 {s.is_primary && "⭐ "}
                 {s.first_name} {s.last_name}
               </span>
-              <span className="text-pool-900/50">{s.club_abbrev ?? s.club_name ?? ""}{s.birth_year ? ` · ${s.birth_year}` : ""}</span>
-            </div>
+              <span className="text-pool-900/50">{s.club_abbrev ?? s.club_name ?? ""}{s.birth_year ? ` · ${s.birth_year}` : ""} ›</span>
+            </Link>
           ))}
         </div>
       </section>

@@ -1,10 +1,12 @@
 import Nav from "@/components/Nav";
 import { getUpcomingCompetitions, getRecentResults } from "@/lib/queries";
+import { getRole } from "@/lib/auth";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function ZavodyPage() {
+  const role = (await getRole()) ?? "kid";
   const [upcoming, recent] = await Promise.all([getUpcomingCompetitions(), getRecentResults(200)]);
 
   // group past results by competition day
@@ -62,7 +64,7 @@ export default async function ZavodyPage() {
           {days.length === 0 && <p className="text-sm text-pool-900/50">Zatím nic — spusť synchronizaci.</p>}
         </div>
       </section>
-      <Nav />
+      <Nav role={role} />
     </main>
   );
 }

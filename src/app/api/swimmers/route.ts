@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getProfile, getOutputs } from "@/lib/csps";
-import { AUTH_COOKIE, authToken } from "@/lib/auth";
+import { isParent } from "@/lib/auth";
 
 async function authorized(): Promise<boolean> {
-  const c = await cookies();
-  return c.get(AUTH_COOKIE)?.value === authToken();
+  return isParent();
 }
 
 // Add a swimmer to the watchlist by CSPS userId (from their profile URL on vysledky.czechswimming.cz)

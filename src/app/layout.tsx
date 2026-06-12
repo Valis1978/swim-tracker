@@ -17,6 +17,13 @@ export const metadata: Metadata = {
   description: "Plavecké výsledky, pokroky a závody",
   manifest: "/manifest.json",
   robots: { index: false, follow: false },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Plavání" },
 };
 

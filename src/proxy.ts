@@ -20,7 +20,7 @@ async function getTokens(): Promise<{ parent: string; kid: string }> {
   return tokens as { parent: string; kid: string };
 }
 
-const KID_ALLOWED = ["/viki", "/zavody"];
+const KID_ALLOWED = ["/viki", "/zavody", "/dalkove"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

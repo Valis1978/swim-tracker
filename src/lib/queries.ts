@@ -117,3 +117,15 @@ export async function getOpenWaterResults(swimmerId: string): Promise<OwResult[]
     .order("swim_date", { ascending: false });
   return (data ?? []) as OwResult[];
 }
+
+export interface OwResultWithSwimmer extends OwResult {
+  swimmer: Swimmer;
+}
+
+export async function getAllOpenWater(): Promise<OwResultWithSwimmer[]> {
+  const { data } = await db()
+    .from("swim_ow_results")
+    .select("*, swimmer:swim_swimmers(*)")
+    .order("swim_date", { ascending: false });
+  return ((data ?? []) as OwResultWithSwimmer[]).filter((r) => r.swimmer && r.swimmer.active);
+}

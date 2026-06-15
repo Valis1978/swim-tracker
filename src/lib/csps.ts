@@ -208,3 +208,62 @@ export async function getStartList(competitionId: number): Promise<StartListRow[
   }
   return rows;
 }
+
+// ---- Open water (dálkové plavání, sport 2) -------------------------------
+// Separate model: distance categories, no stroke code / pool length, placing by `order`.
+
+export interface OwApplication {
+  userId: number;
+  categoryId: number;
+  distanceLabel: string;
+  gender: string;
+  overLimit: boolean;
+  date: string;
+}
+
+export async function getOpenWaterEntries(competitionId: number): Promise<OwApplication[]> {
+  const d = await get<{
+    halfDays: {
+      date: string;
+      competitionCategories: {
+        competitionCategoryId: number;
+        disciplineTitle: string;
+        gender: string;
+        applications: { userId: number; overLimit: boolean }[];
+      }[];
+    }[];
+  }>(`/competitions/${competitionId}/applications`);
+  const out: OwApplication[] = [];
+  for (const h of d.halfDays ?? []) {
+    for (const c of h.competitionCategories ?? []) {
+      for (const a of c.applications ?? []) {
+        out.push({
+          userId: a.userId,
+          categoryId: c.competitionCategoryId,
+          distanceLabel: c.disciplineTitle,
+          gender: c.gender,
+          overLimit: a.overLimit,
+          date: h.date,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export interface OwOutput {
+  userId: number;
+  time: number;
+  order: number;
+  birthYear: number;
+}
+
+export async function getCategoryOutputs(categoryId: number): Promise<OwOutput[]> {
+  const d = await get<{ singleOutputs: OwOutput[] }>(`/competitions/categories/${categoryId}/outputs`);
+  return (d.singleOutputs ?? []).map((o) => ({
+    userId: o.userId,
+    time: o.time,
+    order: o.order,
+    birthYear: o.birthYear,
+  }));
+}

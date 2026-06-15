@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import Nav from "@/components/Nav";
 import Sparkline from "@/components/Sparkline";
 import { db, Swimmer } from "@/lib/db";
-import { getResults, personalBests } from "@/lib/queries";
+import { getResults, getOpenWaterResults, personalBests } from "@/lib/queries";
+import OpenWaterSection from "@/components/OpenWaterSection";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export default async function PlavecPage({ params }: { params: Promise<{ id: str
   const swimmer = data as Swimmer | null;
   if (!swimmer) notFound();
 
-  const results = await getResults(swimmer.id);
+  const [results, owResults] = await Promise.all([getResults(swimmer.id), getOpenWaterResults(swimmer.id)]);
   const finals = results.filter((r) => !r.is_split && !r.is_dsq);
   const pbs = personalBests(results, 25);
   const pbs50 = personalBests(results, 50);
@@ -80,6 +81,8 @@ export default async function PlavecPage({ params }: { params: Promise<{ id: str
           </div>
         </section>
       )}
+
+      <OpenWaterSection results={owResults} heading="Dálkové plavání 🌊" />
 
       <section>
         <h2 className="text-lg font-bold text-pool-800 mb-2">Historie závodů</h2>

@@ -95,3 +95,25 @@ export function personalBests(results: Result[], pool: number = 25): Map<string,
   }
   return pb;
 }
+
+export interface OwResult {
+  id: string;
+  swimmer_id: string;
+  competition_title: string | null;
+  location: string | null;
+  distance_label: string;
+  time_ms: number | null;
+  place_rank: number | null;
+  field_n: number | null;
+  status: "entered" | "reserve" | "result";
+  swim_date: string | null;
+}
+
+export async function getOpenWaterResults(swimmerId: string): Promise<OwResult[]> {
+  const { data } = await db()
+    .from("swim_ow_results")
+    .select("*")
+    .eq("swimmer_id", swimmerId)
+    .order("swim_date", { ascending: false });
+  return (data ?? []) as OwResult[];
+}

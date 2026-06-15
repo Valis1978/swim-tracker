@@ -71,6 +71,13 @@ export async function runSync(): Promise<{ newResults: number; swimmers: number;
     notes.push(`upcoming: ${(e as Error).message}`);
   }
 
+  try {
+    const ow = await scanOpenWater();
+    notes.push(...ow.notes);
+  } catch (e) {
+    notes.push(`openwater: ${(e as Error).message}`);
+  }
+
   await db().from("swim_settings").upsert({ key: "last_sync", value: { at: new Date().toISOString(), newResults: inserted }, updated_at: new Date().toISOString() });
   return { newResults: inserted, swimmers: swimmers?.length ?? 0, notes };
 }
@@ -327,4 +334,109 @@ export async function scanUpcoming(): Promise<{ notified: number }> {
     }
   }
   return { notified };
+}
+
+// ---- Open water (dálkové plavání) ----------------------------------------
+// For each tracked swimmer, find their open-water races via applications (userId match),
+// then resolve time + placing from the category outputs once results exist.
+
+export async function scanOpenWater(): Promise<{ newResults: number; notes: string[] }> {
+  const notes: string[] = [];
+  const { data: swimmers } = await db().from("swim_swimmers").select("*").eq("active", true);
+  const byUserId = new Map((swimmers ?? []).map((s: Swimmer) => [s.csps_user_id, s]));
+  if (byUserId.size === 0) return { newResults: 0, notes };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 45 * 86400_000).toISOString().slice(0, 10);
+  const to = new Date(Date.now() + 21 * 86400_000).toISOString().slice(0, 10);
+  const year = new Date().getFullYear();
+
+  let comps: csps.CspsCompetitionRow[] = [];
+  try {
+    comps = (await csps.getCompetitions(year)).filter(
+      (c) => c.sport === 2 && !c.masters && c.startDate?.slice(0, 10) >= from && c.startDate?.slice(0, 10) <= to
+    );
+  } catch (e) {
+    notes.push(`ow competitions: ${(e as Error).message}`);
+    return { newResults: 0, notes };
+  }
+
+  let newResults = 0;
+  for (const comp of comps) {
+    let entries: csps.OwApplication[];
+    try {
+      entries = await csps.getOpenWaterEntries(comp.competitionId);
+    } catch {
+      continue;
+    }
+    const ours = entries.filter((e) => byUserId.has(e.userId));
+    if (ours.length === 0) continue;
+
+    // cache category outputs so we fetch each category at most once
+    const catCache = new Map<number, csps.OwOutput[] | null>();
+    const isPast = comp.startDate?.slice(0, 10) <= today;
+
+    for (const e of ours) {
+      const swimmer = byUserId.get(e.userId)!;
+      let result: csps.OwOutput | undefined;
+      let fieldN: number | null = null;
+      if (isPast) {
+        if (!catCache.has(e.categoryId)) {
+          try {
+            catCache.set(e.categoryId, await csps.getCategoryOutputs(e.categoryId));
+          } catch {
+            catCache.set(e.categoryId, null);
+          }
+        }
+        const outs = catCache.get(e.categoryId);
+        if (outs && outs.length) {
+          fieldN = outs.length;
+          result = outs.find((o) => o.userId === e.userId);
+        }
+      }
+
+      const status = result ? "result" : e.overLimit ? "reserve" : "entered";
+      const { data: existing } = await db()
+        .from("swim_ow_results")
+        .select("status, time_ms")
+        .eq("swimmer_id", swimmer.id)
+        .eq("competition_csps_id", comp.competitionId)
+        .eq("category_id", e.categoryId)
+        .maybeSingle();
+      const becameResult = result && existing?.status !== "result";
+
+      await db().from("swim_ow_results").upsert(
+        {
+          swimmer_id: swimmer.id,
+          competition_csps_id: comp.competitionId,
+          competition_title: comp.title,
+          location: comp.location,
+          category_id: e.categoryId,
+          distance_label: e.distanceLabel,
+          gender: e.gender,
+          time_ms: result?.time ?? null,
+          place_rank: result?.order ?? null,
+          field_n: fieldN,
+          status,
+          swim_date: comp.startDate?.slice(0, 10) ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "swimmer_id,competition_csps_id,category_id" }
+      );
+
+      if (becameResult && result) {
+        newResults += 1;
+        const who = swimmer.is_primary ? "🏊‍♀️ <b>Viki</b>" : `${swimmer.first_name} ${swimmer.last_name}`;
+        const place = fieldN ? ` — ${result.order}. z ${fieldN}` : "";
+        await sendTelegram(`🌊 <b>Dálkové plavání</b> — ${comp.title}\n${who}: ${e.distanceLabel} ${fmtTime(result.time)}${place}`);
+        if (swimmer.is_primary) {
+          await db().from("swim_badges").upsert(
+            { swimmer_id: swimmer.id, badge_key: "open_water", label: "Dálkové plavání", emoji: "🌊" },
+            { onConflict: "swimmer_id,badge_key", ignoreDuplicates: true }
+          );
+        }
+      }
+    }
+  }
+  return { newResults, notes };
 }

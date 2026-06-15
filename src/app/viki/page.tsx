@@ -1,7 +1,8 @@
 import Nav from "@/components/Nav";
 import Confetti from "@/components/Confetti";
 import Sparkline from "@/components/Sparkline";
-import { getPrimary, getResults, getBadges, getUpcomingCompetitions, personalBests } from "@/lib/queries";
+import OpenWaterSection from "@/components/OpenWaterSection";
+import { getPrimary, getResults, getBadges, getUpcomingCompetitions, getOpenWaterResults, personalBests } from "@/lib/queries";
 import { getRole } from "@/lib/auth";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
@@ -19,10 +20,11 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
       </main>
     );
   }
-  const [results, badges, upcoming] = await Promise.all([
+  const [results, badges, upcoming, owResults] = await Promise.all([
     getResults(primary.id),
     getBadges(primary.id),
     getUpcomingCompetitions(),
+    getOpenWaterResults(primary.id),
   ]);
   const finals = results.filter((r) => !r.is_split && !r.is_dsq);
   const pbs = personalBests(results, 25);
@@ -194,6 +196,8 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
           </div>
         </section>
       )}
+
+      <OpenWaterSection results={owResults} kid />
 
       {lastRace.length > 0 && (
         <section>

@@ -1,5 +1,6 @@
 import { db, Swimmer } from "./db";
 import * as csps from "./csps";
+import { scrapeOpenWaterResults, distanceKey } from "./openwater_scrape";
 import { fmtTime, fmtDelta, disciplineLabel } from "./format";
 import { sendTelegram } from "./telegram";
 
@@ -76,6 +77,13 @@ export async function runSync(): Promise<{ newResults: number; swimmers: number;
     notes.push(...ow.notes);
   } catch (e) {
     notes.push(`openwater: ${(e as Error).message}`);
+  }
+
+  try {
+    const ows = await scrapeOwResults();
+    notes.push(...ows.notes);
+  } catch (e) {
+    notes.push(`ow-scrape: ${(e as Error).message}`);
   }
 
   await db().from("swim_settings").upsert({ key: "last_sync", value: { at: new Date().toISOString(), newResults: inserted }, updated_at: new Date().toISOString() });
@@ -413,6 +421,7 @@ export async function scanOpenWater(): Promise<{ newResults: number; notes: stri
           location: comp.location,
           category_id: e.categoryId,
           distance_label: e.distanceLabel,
+          distance_key: distanceKey(e.distanceLabel),
           gender: e.gender,
           time_ms: result?.time ?? null,
           place_rank: result?.order ?? null,
@@ -436,6 +445,62 @@ export async function scanOpenWater(): Promise<{ newResults: number; notes: stri
           );
         }
       }
+    }
+  }
+  return { newResults, notes };
+}
+
+// ---- Open-water RESULTS from plavani.info (PDF scrape) -------------------
+// CSPS doesn't carry open-water results; plavani.info publishes them as PDFs.
+// Merge scraped results into swim_ow_results by (swimmer, date, distance_key),
+// upgrading existing 'entered' rows to 'result' and inserting plavani-only races.
+
+export async function scrapeOwResults(): Promise<{ newResults: number; notes: string[] }> {
+  const { data: swimmers } = await db().from("swim_swimmers").select("*").eq("active", true);
+  const list = (swimmers ?? []) as Swimmer[];
+  if (list.length === 0) return { newResults: 0, notes: [] };
+
+  const { matches, notes } = await scrapeOpenWaterResults(
+    list.map((s) => ({ id: s.id, last_name: s.last_name, birth_year: s.birth_year, club_abbrev: s.club_abbrev }))
+  );
+
+  let newResults = 0;
+  const byId = new Map(list.map((s) => [s.id, s]));
+  for (const m of matches) {
+    const { data: existing } = await db()
+      .from("swim_ow_results")
+      .select("id, status")
+      .eq("swimmer_id", m.swimmerId)
+      .eq("swim_date", m.date)
+      .eq("distance_key", m.distanceKey)
+      .maybeSingle();
+
+    if (existing?.status === "result") continue; // already have it
+
+    if (existing) {
+      await db().from("swim_ow_results").update({
+        time_ms: m.finishMs, place_rank: m.placing, field_n: m.field,
+        status: "result", source: "plavani", competition_title: m.title,
+        location: m.title, distance_label: m.distanceLabel, updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await db().from("swim_ow_results").insert({
+        swimmer_id: m.swimmerId, competition_csps_id: null, category_id: null,
+        competition_title: m.title, location: m.title, distance_label: m.distanceLabel,
+        distance_key: m.distanceKey, time_ms: m.finishMs, place_rank: m.placing,
+        field_n: m.field, status: "result", source: "plavani", swim_date: m.date,
+      });
+    }
+
+    newResults += 1;
+    const s = byId.get(m.swimmerId)!;
+    const who = s.is_primary ? "🏊‍♀️ <b>Viki</b>" : `${s.first_name} ${s.last_name}`;
+    await sendTelegram(`🌊 <b>Dálkové plavání</b> — ${m.title}\n${who}: ${m.distanceLabel} ${fmtTime(m.finishMs)} — ${m.placing}. z ${m.field}`);
+    if (s.is_primary) {
+      await db().from("swim_badges").upsert(
+        { swimmer_id: s.id, badge_key: "open_water", label: "Dálkové plavání", emoji: "🌊" },
+        { onConflict: "swimmer_id,badge_key", ignoreDuplicates: true }
+      );
     }
   }
   return { newResults, notes };

@@ -33,11 +33,12 @@ export default function OpenWaterSection({ results, heading = "Dálkové plaván
                 ) : (
                   <>
                     <p className="text-2xl font-bold text-pool-900 leading-none">{fmtTime(r.time_ms)}</p>
-                    {r.place_rank != null && (
+                    {!kid && r.place_rank != null && (
                       <p className="text-xs font-semibold text-medal mt-1">
-                        {kid ? "" : "umístění "}{r.place_rank}.{r.field_n ? ` z ${r.field_n}` : ""}
+                        umístění {r.place_rank}.{r.field_n ? ` z ${r.field_n}` : ""}
                       </p>
                     )}
+                    {kid && <p className="text-xs font-semibold text-pool-500 mt-1">dokončeno 🌊</p>}
                   </>
                 )}
               </div>

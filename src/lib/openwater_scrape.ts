@@ -167,11 +167,15 @@ export async function scrapeOpenWaterResults(swimmers: ScrapeSwimmer[], sinceDay
       const nlast = normName(sw.last_name);
       const yr = sw.birth_year ? String(sw.birth_year) : null;
       const club = sw.club_abbrev;
-      const hit = rows.find(
+      // a swimmer can appear in several distances in one PDF (e.g. 1 km AND 3 km) — take them all
+      const hits = rows.filter(
         (r) => normName(r.line).includes(nlast) && (!yr || r.line.includes(yr)) && (!club || new RegExp(club, "i").test(r.line))
       );
-      if (hit) {
+      const seenKeys = new Set<string>();
+      for (const hit of hits) {
         const dkey = distanceKey(hit.category);
+        if (seenKeys.has(dkey)) continue;
+        seenKeys.add(dkey);
         matches.push({
           swimmerId: sw.id,
           date: ref.date,

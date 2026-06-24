@@ -380,39 +380,10 @@ export async function scanOpenWater(): Promise<{ newResults: number; notes: stri
     const ours = entries.filter((e) => byUserId.has(e.userId));
     if (ours.length === 0) continue;
 
-    // cache category outputs so we fetch each category at most once
-    const catCache = new Map<number, csps.OwOutput[] | null>();
-    const isPast = comp.startDate?.slice(0, 10) <= today;
-
+    // CSPS carries entries only — open-water RESULTS come from the plavani.info scraper.
+    // Insert an entry if none exists; never clobber an existing row (especially a result).
     for (const e of ours) {
       const swimmer = byUserId.get(e.userId)!;
-      let result: csps.OwOutput | undefined;
-      let fieldN: number | null = null;
-      if (isPast) {
-        if (!catCache.has(e.categoryId)) {
-          try {
-            catCache.set(e.categoryId, await csps.getCategoryOutputs(e.categoryId));
-          } catch {
-            catCache.set(e.categoryId, null);
-          }
-        }
-        const outs = catCache.get(e.categoryId);
-        if (outs && outs.length) {
-          fieldN = outs.length;
-          result = outs.find((o) => o.userId === e.userId);
-        }
-      }
-
-      const status = result ? "result" : e.overLimit ? "reserve" : "entered";
-      const { data: existing } = await db()
-        .from("swim_ow_results")
-        .select("status, time_ms")
-        .eq("swimmer_id", swimmer.id)
-        .eq("competition_csps_id", comp.competitionId)
-        .eq("category_id", e.categoryId)
-        .maybeSingle();
-      const becameResult = result && existing?.status !== "result";
-
       await db().from("swim_ow_results").upsert(
         {
           swimmer_id: swimmer.id,
@@ -423,28 +394,11 @@ export async function scanOpenWater(): Promise<{ newResults: number; notes: stri
           distance_label: e.distanceLabel,
           distance_key: distanceKey(e.distanceLabel),
           gender: e.gender,
-          time_ms: result?.time ?? null,
-          place_rank: result?.order ?? null,
-          field_n: fieldN,
-          status,
+          status: e.overLimit ? "reserve" : "entered",
           swim_date: comp.startDate?.slice(0, 10) ?? null,
-          updated_at: new Date().toISOString(),
         },
-        { onConflict: "swimmer_id,competition_csps_id,category_id" }
+        { onConflict: "swimmer_id,swim_date,distance_key", ignoreDuplicates: true }
       );
-
-      if (becameResult && result) {
-        newResults += 1;
-        const who = swimmer.is_primary ? "🏊‍♀️ <b>Viki</b>" : `${swimmer.first_name} ${swimmer.last_name}`;
-        const place = fieldN ? ` — ${result.order}. z ${fieldN}` : "";
-        await sendTelegram(`🌊 <b>Dálkové plavání</b> — ${comp.title}\n${who}: ${e.distanceLabel} ${fmtTime(result.time)}${place}`);
-        if (swimmer.is_primary) {
-          await db().from("swim_badges").upsert(
-            { swimmer_id: swimmer.id, badge_key: "open_water", label: "Dálkové plavání", emoji: "🌊" },
-            { onConflict: "swimmer_id,badge_key", ignoreDuplicates: true }
-          );
-        }
-      }
     }
   }
   return { newResults, notes };

@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth";
 import Nav from "@/components/Nav";
 import PrehledTabs from "@/components/PrehledTabs";
 import { db, RankingSnapshot } from "@/lib/db";
@@ -11,6 +12,7 @@ type SnapshotWithEntries = RankingSnapshot & { entries: Entry[] | null };
 
 // Trajectory of the field vs. the primary swimmer between the oldest and newest ranking snapshot.
 export default async function FormaPage() {
+  await requireRole(true);
   const primary = await getPrimary();
   const { data } = await db()
     .from("swim_rankings_snapshots")

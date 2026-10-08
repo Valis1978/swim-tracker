@@ -1,12 +1,12 @@
 import Nav from "@/components/Nav";
 import { getUpcomingCompetitions, getRecentResults, getSwimmers } from "@/lib/queries";
-import { getRole } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function ZavodyPage() {
-  const role = (await getRole()) ?? "kid";
+  const role = await requireRole();
   const [upcoming, recent, swimmers] = await Promise.all([getUpcomingCompetitions(), getRecentResults(200), getSwimmers()]);
   const byCsps = new Map(swimmers.map((s) => [String(s.csps_user_id), s]));
   const STATUS_LABEL = { accepted: "", reserve: " (pod čarou)", entered: "" } as const;

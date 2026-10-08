@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { safeLoginPath } from "@/lib/login-path";
 
 function PinForm() {
   const [pin, setPin] = useState("");
@@ -21,10 +22,10 @@ function PinForm() {
     });
     setBusy(false);
     if (res.ok) {
-      router.replace(params.get("next") ?? "/viki");
+      router.replace(safeLoginPath(params.get("next")));
       router.refresh();
     } else {
-      setError("To není správný PIN, zkus to znovu 🙈");
+      setError(res.status === 429 ? "Příliš mnoho pokusů. Zkus to za 15 minut." : "To není správný PIN, zkus to znovu 🙈");
       setPin("");
     }
   }
@@ -34,6 +35,7 @@ function PinForm() {
       <input
         type="password"
         inputMode="numeric"
+        maxLength={128}
         autoFocus
         value={pin}
         onChange={(e) => setPin(e.target.value)}

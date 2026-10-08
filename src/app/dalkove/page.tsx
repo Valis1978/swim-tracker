@@ -1,12 +1,12 @@
 import Nav from "@/components/Nav";
 import OpenWaterSection from "@/components/OpenWaterSection";
-import { getRole } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { getPrimary, getOpenWaterResults, getAllOpenWater, OwResult } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function DalkovePage() {
-  const role = (await getRole()) ?? "kid";
+  const role = await requireRole();
 
   if (role === "kid") {
     const primary = await getPrimary();

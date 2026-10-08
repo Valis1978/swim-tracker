@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Nav from "@/components/Nav";
@@ -10,6 +11,7 @@ import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function PlavecPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireRole(true);
   const { id } = await params;
   const { data } = await db().from("swim_swimmers").select("*").eq("id", id).maybeSingle();
   const swimmer = data as Swimmer | null;

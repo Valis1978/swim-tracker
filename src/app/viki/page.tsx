@@ -2,14 +2,14 @@ import Nav from "@/components/Nav";
 import Confetti from "@/components/Confetti";
 import Sparkline from "@/components/Sparkline";
 import { getPrimary, getResults, getBadges, getUpcomingCompetitions, personalBests } from "@/lib/queries";
-import { getRole } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function VikiPage({ searchParams }: { searchParams: Promise<{ slavime?: string }> }) {
   const { slavime } = await searchParams;
-  const role = (await getRole()) ?? "kid";
+  const role = await requireRole();
   const primary = await getPrimary();
   if (!primary) {
     return (

@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth";
 import Nav from "@/components/Nav";
 import { getSwimmers } from "@/lib/queries";
 import { db } from "@/lib/db";
@@ -6,6 +7,7 @@ import WatchlistManager from "./WatchlistManager";
 export const dynamic = "force-dynamic";
 
 export default async function NastaveniPage() {
+  await requireRole(true);
   const swimmers = await getSwimmers();
   const { data: lastSync } = await db().from("swim_settings").select("value").eq("key", "last_sync").maybeSingle();
   const lastSyncAt = (lastSync?.value as { at?: string } | null)?.at ?? null;

@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth";
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import PrehledTabs from "@/components/PrehledTabs";
@@ -7,6 +8,7 @@ import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function PrehledPage() {
+  await requireRole(true);
   const [primary, snapshots, swimmers, recent] = await Promise.all([
     getPrimary(),
     getLatestSnapshots(),

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16 — Samoaktualizace / Self-update
+
+**CZ:** Appka přidaná na plochu telefonu drží starou stránku v paměti klidně několik dní a nemá tlačítko obnovit. Nově se při každém návratu do appky (a každých 10 minut) zeptá serveru na verzi (`/api/version`) a při nové verzi se jednou sama načte znovu (bez smyčky).
+
+**EN:** Home-screen app kept stale pages for days. On every return to the foreground (and every 10 min) it now checks `/api/version` (public, build ID only) and reloads once when the build changed (loop-guarded via sessionStorage).
+
 ## 2026-10-16 — Jména soupeřek / Rivals by name
 
 **CZ:** Viki vidí jména ostatních plavkyň (veřejné výsledky a startovky svazu): v přehrání rozplavby i ročníku (sloupec jmen u drah jako v televizi, do 15 drah), v seznamu „Tvoje rozplavba“ před závodem a v novém rozbalovacím seznamu „Kdo plaval s tebou“ (rozplavba + celý ročník s časy). Přehrání je přes celou šířku karty, písmo větší. Jména se ukládají ze startovky OMEGA a z výsledků kategorie; starší závody doplněny. Zobrazuje se jen se zapnutým pořadím.

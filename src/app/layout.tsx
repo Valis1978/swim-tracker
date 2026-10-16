@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Lexend } from "next/font/google";
 import "./globals.css";
+import UpdateWatcher from "@/components/UpdateWatcher";
 
 const bricolage = Bricolage_Grotesque({
   variable: "--font-bricolage",
@@ -41,7 +42,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="cs" className={`${bricolage.variable} ${lexend.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <UpdateWatcher />
+      </body>
     </html>
   );
 }

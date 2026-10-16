@@ -10,7 +10,7 @@ const KID_API = ["/api/avatar"];
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (
-    pathname === "/pin" || pathname === "/api/pin" || pathname === "/api/sync" ||
+    pathname === "/pin" || pathname === "/api/pin" || pathname === "/api/sync" || pathname === "/api/version" ||
     pathname.startsWith("/_next/") || pathname === "/manifest.json" ||
     pathname.startsWith("/icons/") || pathname === "/favicon.ico"
   ) return NextResponse.next();

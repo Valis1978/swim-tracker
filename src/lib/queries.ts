@@ -1,5 +1,5 @@
 import { db, Swimmer, Result, RankingSnapshot, Badge } from "./db";
-import type { EntrySnapshot, HistoryItem } from "./entries";
+import type { EntrySnapshot, HistoryItem, RaceField } from "./entries";
 import type { PublicDoc } from "./sync_entries";
 import type { CspsHalfDay } from "./csps";
 import { niceTitle } from "./present";
@@ -159,6 +159,7 @@ export interface EntryRow extends EntrySnapshot {
   place_year: number | null;
   field_year: number | null;
   source: string | null;
+  field: RaceField | null;
   history: HistoryItem[];
 }
 

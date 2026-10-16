@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-16 (tričko a celé rozplavby)
+
+### CZ
+- **„Dnes závodíš!"** začíná na bloku v oddílovém bílém tričku a trenýrkách: zamává, tričko shodí, připraví se a skočí.
+- **Přehrání závodu má tři pohledy:** proti rekordu, **celá rozplavba** (skutečné dráhy, ročníky a časy všech
+  plavkyň v její rozplavbě) a **celý ročník** (všechny holky jejího ročníku z té trati v jednom bazénu). Rozplavbu
+  a ročník Viki uvidí jen se zapnutým pořadím. Jména ostatních dětí appka neukládá.
+
+### EN
+- Race-day intro in the club T-shirt; replay views: ghost, real heat (lanes, birth years, times) and whole birth year.
+- Heat and birth-year field stored per swum entry from CSPS results (group = heat, line = lane), no names.
+
 ## 2026-10-16 (čepice a oddílová výbava)
 
 ### CZ

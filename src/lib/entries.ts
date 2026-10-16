@@ -29,6 +29,13 @@ export interface HistoryItem {
 
 export type Tone = "wait" | "reserve" | "ok" | "drawn" | "off" | "done" | "dsq";
 
+// Who swam with her: her heat (lane, birth year, time) and every time of her birth year in that event.
+export interface RaceField {
+  heat: number | null;
+  racers: { lane: number; year: number; time: number; me: boolean }[];
+  year: number[]; // sorted times of swimmers born the same year (hers included)
+}
+
 export const EMPTY: EntrySnapshot = { status: "entered", reserve_no: null, heat: null, heat_count: null, lane: null, result_ms: null };
 
 export function snapshot(s: Partial<EntrySnapshot> & { status: EntryStatus }): EntrySnapshot {

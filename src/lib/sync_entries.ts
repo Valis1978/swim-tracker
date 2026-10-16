@@ -29,6 +29,7 @@ import {
   type DocVerdict,
   type EntrySnapshot,
   type HistoryItem,
+  type RaceField,
   type StatusInputs,
 } from "./entries";
 import { addDays, pragueNow, pragueToday } from "./time";
@@ -146,6 +147,7 @@ interface EntryRow extends EntrySnapshot {
   swim_date: string | null;
   category_id: number | null;
   places_checked_at: string | null;
+  field: unknown;
   source: string | null;
   history: HistoryItem[];
 }
@@ -402,7 +404,7 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
       if (error) notes.push(`entry ${cid}/${t.eventNo}: ${error.message}`);
       const catId = t.app?.categoryId ?? t.row?.category_id ?? null;
       const recent = (comp.endDate ?? comp.startDate) >= addDays(today, -2);
-      if (catId && (final.snap.status === "swum" || final.snap.status === "dsq") && (!t.row?.places_checked_at || recent)) {
+      if (catId && (final.snap.status === "swum" || final.snap.status === "dsq") && (!t.row?.places_checked_at || recent || !t.row?.field)) {
         placesTodo.push({ swimmer: t.swimmer, eventNo: t.eventNo, disc: t.disc, catId });
       }
     }
@@ -423,6 +425,18 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
       const valid = outs.filter((o) => o.order > 0 && o.time > 0 && o.time < csps.DSQ_THRESHOLD);
       const me = valid.find((o) => o.userId === p.swimmer.csps_user_id);
       const sameYear = valid.filter((o) => o.birthYear === p.swimmer.birth_year);
+      const heatNo = outs.find((o) => o.userId === p.swimmer.csps_user_id)?.heat ?? null;
+      const field: RaceField = {
+        heat: heatNo,
+        racers:
+          heatNo == null
+            ? []
+            : valid
+                .filter((o) => o.heat === heatNo && o.lane != null)
+                .map((o) => ({ lane: o.lane as number, year: o.birthYear, time: o.time, me: o.userId === p.swimmer.csps_user_id }))
+                .sort((a, b) => a.lane - b.lane),
+        year: sameYear.map((o) => o.time).sort((a, b) => a - b),
+      };
       const { error } = await db()
         .from("swim_entries")
         .update({
@@ -430,6 +444,7 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
           field_overall: valid.length,
           place_year: me ? sameYear.filter((o) => o.time < me.time).length + 1 : null,
           field_year: sameYear.length,
+          field,
           places_checked_at: new Date().toISOString(),
         })
         .eq("swimmer_id", p.swimmer.id)

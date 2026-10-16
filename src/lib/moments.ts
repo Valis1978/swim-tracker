@@ -121,7 +121,7 @@ export function diveMoment(i: MomentInput, onlyMeet?: number): Moment | null {
         ? `${m.comp.title}: první start ${eventName(first.discipline)}, rozplavba ${first.heat}, dráha ${first.lane}${start ? `, start půldne v ${start}` : ""}.`
         : `${m.comp.title}: ${drawn.length === 1 ? "1 trať" : drawn.length < 5 ? `${drawn.length} tratě` : `${drawn.length} tratí`} s rozplavbou a drahou. První: ${eventName(first.discipline)}, dráha ${first.lane}.`,
       href: `/zavod/${m.id}`,
-      params: { lane: String(first.lane) },
+      params: { lane: String(first.lane), intro: raceDay ? "tee" : undefined },
     };
   }
   return null;

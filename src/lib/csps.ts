@@ -288,14 +288,21 @@ export interface OwOutput {
   time: number;
   order: number;
   birthYear: number;
+  heat: number | null; // "group" in CSPS results
+  lane: number | null; // "line"
 }
 
 export async function getCategoryOutputs(categoryId: number): Promise<OwOutput[]> {
-  const d = await get<{ singleOutputs: OwOutput[] }>(`/competitions/categories/${categoryId}/outputs`);
+  const d = await get<{ singleOutputs: (Omit<OwOutput, "heat" | "lane"> & { group?: string | number | null; line?: string | number | null })[] }>(
+    `/competitions/categories/${categoryId}/outputs`
+  );
+  const num = (v: string | number | null | undefined) => (v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v));
   return (d.singleOutputs ?? []).map((o) => ({
     userId: o.userId,
     time: o.time,
     order: o.order,
     birthYear: o.birthYear,
+    heat: num(o.group),
+    lane: num(o.line),
   }));
 }

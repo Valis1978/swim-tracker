@@ -6,8 +6,7 @@ import { RaceStepper, SectionTitle, StatusChip, StatusRope, WaterHero } from "@/
 import { EventCard, PoolBadge } from "@/components/Race";
 import MomentCard from "@/components/anim/MomentCard";
 import { diveMoment } from "@/lib/moments";
-import type { ReplayParams } from "@/lib/anim/replay";
-import { distanceOf } from "@/lib/strokes";
+import { replayParamsFor } from "@/lib/replay_params";
 import { requireRole } from "@/lib/auth";
 import { raceSteps, statusLabel } from "@/lib/entries";
 import { fmtTime } from "@/lib/format";
@@ -58,24 +57,7 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
     return results.some((x) => x.discipline === r.discipline && x.pool_length !== r.pool_length && x.swim_date < r.swim_date) ? "first_pool" : "first";
   };
   const swumBefore = new Set(results.filter((r) => !r.is_dsq).map((r) => r.discipline));
-  const poolLen: 25 | 50 = comp.pool_length === 50 ? 50 : 25;
-  const replayOf = (e: EntryRow): ReplayParams | undefined => {
-    if (e.status !== "swum" || e.result_ms == null) return undefined;
-    const prev = results
-      .filter((r) => r.discipline === e.discipline && r.pool_length === poolLen && !r.is_dsq && r.time_ms < 6_000_000 && r.swim_date < comp.start_date)
-      .sort((a, b) => a.time_ms - b.time_ms)[0];
-    return {
-      title: eventName(e.discipline),
-      distance: distanceOf(e.discipline),
-      pool: poolLen,
-      me: e.result_ms,
-      meLabel: `${NICK} · ${shortDate(comp.start_date)}`,
-      ghost: prev ? prev.time_ms : null,
-      ghostLabel: prev ? `rekord ${shortDate(prev.swim_date)}` : null,
-      lane: e.lane,
-      cap: look.cap,
-    };
-  };
+  const replayOf = (e: EntryRow) => replayParamsFor(e, comp, results, { nick: NICK, cap: look.cap, birthYear: primary.birth_year, showField: parent || kidPlaces });
   const dive = diveMoment(
     { nick: NICK, today, results, pbIds: flags, meets: [{ id: cid, comp, list: mine }], birthYear: primary.birth_year, showPlaces: parent || kidPlaces },
     cid

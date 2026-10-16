@@ -144,31 +144,47 @@ interface Pose {
   legB: number;
   head: number;
   hoodie: number; // 0 = swimsuit, 1 = club hoodie and shorts on
+  tee: number; // 1 = club T-shirt and shorts on
 }
 
 // cartoon swimmer facing right; body axis along +x (head end), origin at the hips
 function cartoonSwimmer(parent: Element, look: Look) {
   const g = S("g", undefined, parent);
-  const kit: Element[] = [];
-  const limb = (len: number, w: number, fill: string, end: "hand" | "foot", sleeve: number) => {
+  const longSleeves: Element[] = []; // hoodie
+  const shortSleeves: Element[] = []; // T-shirt
+  const shorts: Element[] = []; // club shorts with either top
+  const limb = (len: number, w: number, fill: string, end: "hand" | "foot") => {
     const lg = S("g", undefined, g);
     S("rect", { x: -w / 2, y: -w / 2, width: len + w / 2, height: w, rx: w / 2, fill, stroke: C.ink, "stroke-width": 1.6 }, lg);
-    if (end === "hand") S("circle", { cx: len, cy: 0, r: w * 0.66, fill, stroke: C.ink, "stroke-width": 1.5 }, lg);
-    else S("ellipse", { cx: len + 2.5, cy: 0, rx: w * 0.78, ry: w * 0.5, fill, stroke: C.ink, "stroke-width": 1.5 }, lg);
-    kit.push(S("rect", { x: -w / 2 - 1, y: -w / 2 - 1, width: sleeve + w / 2 + 1, height: w + 2, rx: (w + 2) / 2, fill: CLUB_BLUE, stroke: C.ink, "stroke-width": 1.5, opacity: 0 }, lg));
+    if (end === "hand") {
+      S("circle", { cx: len, cy: 0, r: w * 0.66, fill, stroke: C.ink, "stroke-width": 1.5 }, lg);
+      longSleeves.push(S("rect", { x: -w / 2 - 1, y: -w / 2 - 1, width: 17 + w / 2 + 1, height: w + 2, rx: (w + 2) / 2, fill: CLUB_BLUE, stroke: C.ink, "stroke-width": 1.5, opacity: 0 }, lg));
+      const sh = S("g", { opacity: 0 }, lg);
+      S("rect", { x: -w / 2 - 1.5, y: -w / 2 - 1.5, width: 8 + w / 2 + 1.5, height: w + 3, rx: (w + 3) / 2, fill: "#ffffff", stroke: C.ink, "stroke-width": 1.5 }, sh);
+      S("rect", { x: 5, y: -w / 2 - 0.8, width: 2.4, height: w + 1.6, fill: CLUB_CYAN }, sh);
+      shortSleeves.push(sh);
+    } else {
+      S("ellipse", { cx: len + 2.5, cy: 0, rx: w * 0.78, ry: w * 0.5, fill, stroke: C.ink, "stroke-width": 1.5 }, lg);
+      shorts.push(S("rect", { x: -w / 2 - 1, y: -w / 2 - 1, width: 11 + w / 2 + 1, height: w + 2, rx: (w + 2) / 2, fill: CLUB_BLUE, stroke: C.ink, "stroke-width": 1.5, opacity: 0 }, lg));
+    }
     return lg;
   };
-  const legB = limb(27, 9, C.skin2, "foot", 11);
-  const armB = limb(23, 7, C.skin2, "hand", 17);
+  const legB = limb(27, 9, C.skin2, "foot");
+  const armB = limb(23, 7, C.skin2, "hand");
   const torso = S("g", undefined, g);
   S("rect", { x: -8, y: -8.5, width: 37, height: 17, rx: 8.5, fill: C.suit, stroke: C.ink, "stroke-width": 1.8 }, torso);
   S("path", { d: "M-2,-1.5 L22,-1.5", stroke: C.stripe, "stroke-width": 3.2, "stroke-linecap": "round" }, torso);
+  // club T-shirt: white with the blue / cyan swoosh from the club shirts
+  const tee = S("g", { opacity: 0 }, torso);
+  S("rect", { x: -9.5, y: -9.8, width: 39, height: 19.6, rx: 9.8, fill: "#ffffff", stroke: C.ink, "stroke-width": 1.8 }, tee);
+  S("path", { d: "M-4,6.5 C4,-1.5 14,-3.5 26,-0.5", stroke: CLUB_BLUE, "stroke-width": 3.4, "stroke-linecap": "round", fill: "none" }, tee);
+  S("path", { d: "M2,8.2 C10,3.6 18,2.6 24,4.2", stroke: CLUB_CYAN, "stroke-width": 2.2, "stroke-linecap": "round", fill: "none" }, tee);
+  clubMark(tee, 18, -3.8, 0.3, CLUB_BLUE, CLUB_CYAN);
   const hoodie = S("g", { opacity: 0 }, torso);
-  kit.push(hoodie);
   S("ellipse", { cx: 28, cy: -9, rx: 7, ry: 5, fill: CLUB_BLUE_DARK, stroke: C.ink, "stroke-width": 1.5 }, hoodie);
   S("rect", { x: -10, y: -10.5, width: 40, height: 21, rx: 10.5, fill: CLUB_BLUE, stroke: C.ink, "stroke-width": 1.8 }, hoodie);
   clubMark(hoodie, 13, 3.5, 0.5, "#ffffff", CLUB_CYAN);
-  const legF = limb(27, 9, C.skin, "foot", 11);
+  const legF = limb(27, 9, C.skin, "foot");
   const head = S("g", undefined, g);
   S("circle", { cx: 0, cy: 0, r: 10.5, fill: C.skin, stroke: C.ink, "stroke-width": 1.8 }, head);
   // the cap covers the top and back of the head (the face looks towards +y in body space)
@@ -177,8 +193,8 @@ function cartoonSwimmer(parent: Element, look: Look) {
   S("ellipse", { cx: 4.4, cy: 6.4, rx: 3.9, ry: 2.8, transform: "rotate(-30 4.4 6.4)", fill: C.lens, stroke: C.ink, "stroke-width": 1.2 }, head);
   S("circle", { cx: 5.6, cy: 5.6, r: 1, fill: "#bff3ff" }, head);
   S("path", { d: "M-4.4,4.6 Q-3.6,7.6 -0.8,7.9", stroke: C.ink, "stroke-width": 1.4, fill: "none", "stroke-linecap": "round" }, head);
-  const armF = limb(23, 7, C.skin, "hand", 17);
-  const p: Pose = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, armF: 0, armB: 0, legF: 180, legB: 182, head: 0, hoodie: 0 };
+  const armF = limb(23, 7, C.skin, "hand");
+  const p: Pose = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, armF: 0, armB: 0, legF: 180, legB: 182, head: 0, hoodie: 0, tee: 0 };
   const api = {
     p,
     set(q: Partial<Pose>) {
@@ -189,7 +205,11 @@ function cartoonSwimmer(parent: Element, look: Look) {
       armB.setAttribute("transform", `translate(23 -1.5) rotate(${f2(p.armB)})`);
       armF.setAttribute("transform", `translate(23 1.5) rotate(${f2(p.armF)})`);
       head.setAttribute("transform", `translate(39 0) rotate(${f2(p.head)})`);
-      for (const k of kit) k.setAttribute("opacity", f2(p.hoodie));
+      hoodie.setAttribute("opacity", f2(p.hoodie));
+      tee.setAttribute("opacity", f2(p.tee));
+      for (const k of longSleeves) k.setAttribute("opacity", f2(p.hoodie));
+      for (const k of shortSleeves) k.setAttribute("opacity", f2(p.tee));
+      for (const k of shorts) k.setAttribute("opacity", f2(Math.max(p.hoodie, p.tee)));
     },
     // world position of the leading hand, for splash timing
     hand(): [number, number] {
@@ -245,9 +265,11 @@ function swimStep(st: Stage, sw: ReturnType<typeof cartoonSwimmer>, s: Record<st
 
 export interface DiveParams {
   lane: string; // number shown on the starting block
+  intro?: "tee"; // race day: she first stands on the block in the club T-shirt and waves
 }
 
-export const diveScene = ({ lane }: DiveParams, look: Look): SceneFactory => (st) => {
+export const diveScene = ({ lane, intro }: DiveParams, look: Look): SceneFactory => (st) => {
+  const off = intro === "tee" ? 1900 : 0;
   const pool = cartoonPool(st, { y0: 172, wallL: 44 });
   deckWall(st, pool.actors, -2, 170, 46);
   const block = startingBlock(pool.actors, 10, 137, lane);
@@ -257,9 +279,25 @@ export const diveScene = ({ lane }: DiveParams, look: Look): SceneFactory => (st
   const s: Record<string, boolean> = {};
   const n: Record<string, number> = {};
   return {
-    end: 6200,
-    rest: 400,
-    update(t, _k, still) {
+    end: 6200 + off,
+    rest: off ? 700 : 400,
+    update(tAll, _k, still) {
+      if (tAll < off) {
+        // race day: on the block in the club T-shirt, a wave, then the T-shirt comes off
+        if (tAll < 1200) {
+          const wave = Math.sin(tAll / 150) * 22;
+          sw.set({ x: 38, y: 97 - Math.abs(Math.sin(tAll / 300)) * 3, rot: -90, armF: -10 + wave, armB: 172, legF: 178, legB: 182, head: 0, tee: 1, hoodie: 0, sx: 1, sy: 1 });
+        } else {
+          const u = E.inOut(seg(tAll, 1250, off));
+          sw.set({ tee: 1 - seg(tAll, 1200, 1350), x: 38, y: lerp(97, 98, u), rot: lerp(-90, 32, u), armF: lerp(150, 30, u), armB: lerp(172, 34, u), legF: lerp(178, 68, u), legB: lerp(182, 72, u), head: lerp(0, -38, u), hoodie: 0, sx: 1, sy: 1 });
+        }
+        once(s, "teeoff", !still && tAll >= 1200, () => {
+          sparkles(st, 44, 70, 8, "#ffffff");
+          sparkles(st, 44, 70, 8, CLUB_CYAN);
+        });
+        return;
+      }
+      const t = tAll - off;
       if (t < 1000) {
         const crouch = E.inOut(seg(t, 600, 1000));
         sw.set({ ...READY, x: 38 - 4 * crouch, y: 98 + 4 * crouch + Math.sin(t / 260) * 0.6 * (1 - crouch), rot: 32 + 4 * crouch });

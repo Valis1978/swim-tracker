@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-16 (animace)
+
+### CZ
+- **Kreslené animace ve chvílích, které se počítají.** Na domovské obrazovce se jednou přehraje to nejdůležitější:
+  nový osobák (tabule se dotočí na nový čas), medaile v ročníku, postup z náhradnic (karta se přetočí na rozplavbu
+  a dráhu), den závodu a zveřejněné rozplavby (skok ze startovního bloku s číslem její dráhy). Pak zůstane „Přehrát znovu".
+- **Závod znovu:** u každé odplavané trati jde přehrát závod shora v její skutečné dráze proti duchovi předchozího
+  rekordu, pro 25 i 50m bazén.
+- Bez knihoven a videí: SVG + canvas + jednoduchá fyzika vody, respektuje „omezit pohyb".
+
+### EN
+- Cartoon "moments" (personal best, medal, reserve promoted, race day / heats drawn) played once per event on the home
+  screen and race page, then available as "replay".
+- Race replay from above against the ghost of the previous record, in her real lane, for 25 m and 50 m pools.
+- Dependency-free engine (SVG scene, canvas particles, spring-chain water), honours reduced motion.
+
 ## 2026-10-16
 
 ### CZ

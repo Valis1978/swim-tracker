@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Nav from "@/components/Nav";
-import Confetti from "@/components/Confetti";
+import MomentCard from "@/components/anim/MomentCard";
 import { ChevronGlyph, MedalGlyph, SparkGlyph, StrokeGlyph } from "@/components/Glyphs";
 import { SectionTitle, StatusChip, ToneDot, WaterHero } from "@/components/Pool";
 import { MeetCard } from "@/components/Race";
@@ -10,8 +10,9 @@ import { fmtTime } from "@/lib/format";
 import { eventName, placeView, toneOf } from "@/lib/present";
 import { getBadges, getCompetitionsByIds, getPrimary, getResults, getSwimmerEntries, kidSeesPlaces, type EntryRow } from "@/lib/queries";
 import { computeRecords, pbFlags } from "@/lib/records";
+import { pickHomeMoment, type Moment } from "@/lib/moments";
 import { STROKE_META, strokeOf } from "@/lib/strokes";
-import { addDays, daysBetween, pragueToday, relativeDay, shortDate } from "@/lib/time";
+import { addDays, pragueToday, relativeDay, shortDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -90,23 +91,19 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
 
   // ---- personal bests
   const flags = pbFlags(results);
-  const finals = results.filter((r) => !r.is_split && !r.is_dsq && r.time_ms < 6_000_000);
-  const raceDays = [...new Set(finals.map((r) => r.swim_date))].sort();
-  const lastRaceDay = raceDays[raceDays.length - 1];
-  const freshPBs: { disc: string; pool: number; timeMs: number; improvedBy: number }[] = [];
-  if (lastRaceDay && (daysBetween(lastRaceDay, today) <= 3 || slavime)) {
-    for (const r of finals.filter((x) => x.swim_date === lastRaceDay)) {
-      if (flags.get(r.id) !== "pb") continue;
-      const prev = results
-        .filter((x) => x.discipline === r.discipline && x.pool_length === r.pool_length && !x.is_dsq && x.time_ms < 6_000_000 && x.swim_date < r.swim_date)
-        .reduce((m, x) => Math.min(m, x.time_ms), Infinity);
-      freshPBs.push({ disc: r.discipline, pool: r.pool_length, timeMs: r.time_ms, improvedBy: (prev - r.time_ms) / 1000 });
-    }
-  }
   const records = [...computeRecords(results, 25), ...computeRecords(results, 50)];
-  const demo = Boolean(slavime) && freshPBs.length === 0;
-  if (demo && records[0]) freshPBs.push({ disc: records[0].discipline, pool: records[0].best.pool_length, timeMs: records[0].best.time_ms, improvedBy: 0.55 });
-  const celebrate = freshPBs.length > 0;
+  let moment: Moment | null = pickHomeMoment({ nick: NICK, today, results, pbIds: flags, meets, birthYear: primary.birth_year, showPlaces: parent || kidPlaces });
+  // ?slavime=1 shows the personal-best animation on demand
+  if (slavime && moment?.kind !== "pb" && records[0]) {
+    const r = records[0];
+    moment = {
+      kind: "pb",
+      key: "pb:demo",
+      title: "Ukázka oslavy",
+      text: `Takhle appka slaví nový osobák. Tvůj rekord: ${eventName(r.discipline)} za ${fmtTime(r.best.time_ms)}.`,
+      params: { label: `${r.distance} m · ${NICK.toUpperCase()}`, time: fmtTime(r.best.time_ms), banner: "NOVÝ OSOBÁK" },
+    };
+  }
   const topRecords = [...records].sort((a, b) => (b.best.points ?? 0) - (a.best.points ?? 0)).slice(0, 4);
 
   // "Moje cesta": first race -> record (25 m), always positive
@@ -120,7 +117,6 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
 
   return (
     <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pb-32 pt-4">
-      {celebrate && <Confetti />}
 
       <WaterHero>
         <div className="px-5 pt-5 pb-4">
@@ -145,23 +141,7 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
         </div>
       </WaterHero>
 
-      {celebrate && (
-        <section className="animate-rise relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#ffcf4a] via-gold to-[#f08a24] p-5 text-[#3d2600] shadow-[0_14px_30px_-14px_rgb(240_138_36/0.8)]">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#3d2600]/70">{demo ? "ukázka oslavy" : "to je ono!"}</p>
-          <h2 className="mt-1 flex items-center gap-2 text-2xl font-extrabold">
-            <SparkGlyph size={24} /> Nový osobák!
-          </h2>
-          {freshPBs.map((p) => (
-            <p key={`${p.disc}-${p.pool}`} className="mt-1.5 font-semibold">
-              {eventName(p.disc)}
-              {p.pool === 50 ? " (50 m bazén)" : ""} — <span className="nums">{fmtTime(p.timeMs)}</span>
-              {p.improvedBy > 0 && (
-                <span className="ml-2 rounded-full bg-white/40 px-2 py-0.5 text-sm">o {p.improvedBy.toFixed(2).replace(".", ",")} s rychleji</span>
-              )}
-            </p>
-          ))}
-        </section>
-      )}
+      {moment && <MomentCard moment={moment} />}
 
       {next && (
         <section>

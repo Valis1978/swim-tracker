@@ -1,4 +1,6 @@
 import Link from "next/link";
+import RaceReplay from "@/components/anim/RaceReplay";
+import type { ReplayParams } from "@/lib/anim/replay";
 import Sparkline from "@/components/Sparkline";
 import { ChevronGlyph, MedalGlyph, PinGlyph, SparkGlyph, StrokeGlyph } from "@/components/Glyphs";
 import { LaneMap, StatusChip, StatusRope } from "@/components/Pool";
@@ -54,6 +56,7 @@ export function EventCard({
   pb,
   delay = 0,
   firstEver = false,
+  replay,
 }: {
   entry: EntryRow;
   birthYear: number | null;
@@ -62,6 +65,7 @@ export function EventCard({
   pb?: "pb" | "first" | "first_pool" | null;
   delay?: number;
   firstEver?: boolean;
+  replay?: ReplayParams;
 }) {
   const st = statusLabel(entry);
   const stroke = strokeOf(entry.discipline);
@@ -119,6 +123,7 @@ export function EventCard({
           {entry.status === "reserve" && <p className="mt-1 text-xs text-[#8a5300]/80">{st.hint}</p>}
           {place?.overall && <p className="mt-1 text-xs text-pool-900/45">{place.overall}</p>}
           {showStory && <EntryStory entry={entry} />}
+          {replay && <RaceReplay params={replay} />}
         </div>
       </div>
       {entry.status === "drawn" && entry.lane != null && (

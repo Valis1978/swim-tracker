@@ -4,10 +4,16 @@ import Nav from "@/components/Nav";
 import { DocGlyph, PinGlyph } from "@/components/Glyphs";
 import { RaceStepper, SectionTitle, StatusChip, StatusRope, WaterHero } from "@/components/Pool";
 import { EventCard, PoolBadge } from "@/components/Race";
+import MomentCard from "@/components/anim/MomentCard";
+import { diveMoment } from "@/lib/moments";
+import type { ReplayParams } from "@/lib/anim/replay";
+import { distanceOf } from "@/lib/strokes";
 import { requireRole } from "@/lib/auth";
 import { raceSteps, statusLabel } from "@/lib/entries";
 import { fmtTime } from "@/lib/format";
 import { eventName, halfDayName, halfDayTimes, meetSummary, toneOf } from "@/lib/present";
+
+const NICK = "Viki";
 import { getCompetition, getCompetitionEntries, getPrimary, getResults, kidSeesPlaces, type EntryRow } from "@/lib/queries";
 import { pbFlags } from "@/lib/records";
 import { pragueNow, relativeDay, shortDate, weekday } from "@/lib/time";
@@ -52,6 +58,27 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
     return results.some((x) => x.discipline === r.discipline && x.pool_length !== r.pool_length && x.swim_date < r.swim_date) ? "first_pool" : "first";
   };
   const swumBefore = new Set(results.filter((r) => !r.is_dsq).map((r) => r.discipline));
+  const poolLen: 25 | 50 = comp.pool_length === 50 ? 50 : 25;
+  const replayOf = (e: EntryRow): ReplayParams | undefined => {
+    if (e.status !== "swum" || e.result_ms == null) return undefined;
+    const prev = results
+      .filter((r) => r.discipline === e.discipline && r.pool_length === poolLen && !r.is_dsq && r.time_ms < 6_000_000 && r.swim_date < comp.start_date)
+      .sort((a, b) => a.time_ms - b.time_ms)[0];
+    return {
+      title: eventName(e.discipline),
+      distance: distanceOf(e.discipline),
+      pool: poolLen,
+      me: e.result_ms,
+      meLabel: `${NICK} · ${shortDate(comp.start_date)}`,
+      ghost: prev ? prev.time_ms : null,
+      ghostLabel: prev ? `rekord ${shortDate(prev.swim_date)}` : null,
+      lane: e.lane,
+    };
+  };
+  const dive = diveMoment(
+    { nick: NICK, today, results, pbIds: flags, meets: [{ id: cid, comp, list: mine }], birthYear: primary.birth_year, showPlaces: parent || kidPlaces },
+    cid
+  );
   const drawPending = steps.find((s) => s.key === "rozlosovani")?.state === "now" && mine.some((e) => e.status === "accepted");
 
   // program grouped by half-day
@@ -104,6 +131,8 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
         </div>
       </WaterHero>
 
+      {dive && <MomentCard moment={{ ...dive, href: undefined }} />}
+
       <section className="animate-rise rounded-3xl border border-pool-100 bg-white px-3 pb-3 pt-4 shadow-[0_6px_18px_-12px_rgb(8_42_60/0.45)]">
         <RaceStepper steps={steps} />
         {drawPending && (
@@ -129,7 +158,7 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
               </div>
               <div className="flex flex-col gap-3">
                 {list.map((e) => (
-                  <EventCard key={e.id} entry={e} birthYear={primary.birth_year} parent={parent} kidPlaces={kidPlaces} pb={pbOf(e)} delay={(order.get(e.id) ?? 0) * 60 + 60} firstEver={!swumBefore.has(e.discipline)} />
+                  <EventCard key={e.id} entry={e} birthYear={primary.birth_year} parent={parent} kidPlaces={kidPlaces} pb={pbOf(e)} delay={(order.get(e.id) ?? 0) * 60 + 60} firstEver={!swumBefore.has(e.discipline)} replay={replayOf(e)} />
                 ))}
               </div>
             </section>

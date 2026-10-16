@@ -1,6 +1,7 @@
 // "Závod znovu": a race replayed from above, against the ghost of the previous record.
 // Pacing is modelled (first length a bit faster after the dive); CSPS has no per-length splits for kids' races.
 import { E, clamp, rnd, type Scene, type SceneFactory } from "./engine";
+import { capOf, type CapKey } from "./look";
 
 export interface ReplayParams {
   title: string; // "50 m prsa"
@@ -11,6 +12,7 @@ export interface ReplayParams {
   ghost: number | null; // previous record, ms
   ghostLabel: string | null; // "rekord 28. 3."
   lane: number | null; // her lane, when known
+  cap?: CapKey; // her chosen cap, also on the replay swimmer
 }
 
 export function fmtRace(ms: number): string {
@@ -54,6 +56,7 @@ export const replayScene = (p: ReplayParams): SceneFactory => (st) => {
   const mx = (m: number) => X0 + ((X1 - X0) * m) / p.pool;
   const flagM = 5;
   const state = { t: 0, party: false };
+  const cap = capOf(p.cap);
 
   const swimmer = (c: CanvasRenderingContext2D, x: number, y: number, dir: number, ph: number, ghost: boolean) => {
     c.save();
@@ -74,10 +77,16 @@ export const replayScene = (p: ReplayParams): SceneFactory => (st) => {
     c.beginPath();
     c.ellipse(-4, 0, 9, 4.6, 0, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = ghost ? "#ffffff" : "#e8504a";
+    c.fillStyle = ghost ? "#ffffff" : cap.base;
     c.beginPath();
     c.arc(7, 0, 4.4, 0, Math.PI * 2);
     c.fill();
+    if (!ghost && cap.split) {
+      c.fillStyle = cap.split;
+      c.beginPath();
+      c.arc(7, 0, 4.4, -Math.PI / 2, Math.PI / 2);
+      c.fill();
+    }
     c.strokeStyle = ghost ? "#ffffff" : "#f3c6a5";
     c.beginPath();
     c.moveTo(-12, -2);

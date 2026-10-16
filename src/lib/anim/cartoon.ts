@@ -1,15 +1,14 @@
 // Cartoon swimmer scenes (side view of the pool): dive from the block, personal best at the wall,
 // reserve -> into the race, medal. Each scene runs once and holds its last frame.
 import { E, S, Stage, T, f2, lerp, once, rnd, seg, uidOf, Water, type Scene, type SceneFactory } from "./engine";
+import { CAP_FRONT_HALF, CAP_PATH, CAP_SEAM, CLUB_BLUE, CLUB_BLUE_DARK, CLUB_CYAN, capOf, type CapStyle, type Look } from "./look";
 
 const C = {
   ink: "#08324a",
   skin: "#f3c6a5",
   skin2: "#dda483",
-  suit: "#0b3a5a",
-  stripe: "#2cb5da",
-  cap: "#e8504a",
-  capHi: "#ffb1a8",
+  suit: CLUB_BLUE_DARK,
+  stripe: CLUB_CYAN,
   lens: "#0b3a5a",
   red: "#e8504a",
   blue: "#1f6fe5",
@@ -33,13 +32,8 @@ interface Pool {
   draw(t: number): void;
 }
 
-// pool hall + water; wallL / wallR mark deck walls
-function cartoonPool(st: Stage, { y0 = 172, wallL = 0, wallR = 400, flags = true } = {}): Pool {
-  const svg = st.svg;
-  const defs = S("defs", undefined, svg);
+function hallBackdrop(svg: Element, defs: Element, flags: boolean) {
   const hall = grad(defs, [[0, "#e9f8fc"], [1, "#c5ebf6"]]);
-  const deep = grad(defs, [[0, "#62d3ec"], [0.35, "#22a9d3"], [1, "#0b6f98"]]);
-  const front = grad(defs, [[0, "#bff0fb", 0.55], [0.25, "#7fdcf1", 0.22], [1, "#0b6f98", 0.18]]);
   S("rect", { x: 0, y: 0, width: 400, height: 300, fill: hall }, svg);
   for (let i = 0; i < 4; i++) S("rect", { x: 22 + i * 98, y: 14, width: 70, height: 30, rx: 7, fill: "#ffffff", opacity: 0.6 }, svg);
   if (flags) {
@@ -52,6 +46,15 @@ function cartoonPool(st: Stage, { y0 = 172, wallL = 0, wallR = 400, flags = true
       S("path", { d: `M${x - 6},${f2(y)} L${x + 6},${f2(y)} L${x},${f2(y + 11)} Z`, fill: cols[i % 3], stroke: C.ink, "stroke-width": 0.8, "stroke-linejoin": "round" }, g);
     }
   }
+}
+
+// pool hall + water; wallL / wallR mark deck walls
+function cartoonPool(st: Stage, { y0 = 172, wallL = 0, wallR = 400, flags = true } = {}): Pool {
+  const svg = st.svg;
+  const defs = S("defs", undefined, svg);
+  const deep = grad(defs, [[0, "#62d3ec"], [0.35, "#22a9d3"], [1, "#0b6f98"]]);
+  const front = grad(defs, [[0, "#bff0fb", 0.55], [0.25, "#7fdcf1", 0.22], [1, "#0b6f98", 0.18]]);
+  hallBackdrop(svg, defs, flags);
   st.water = new Water(y0, wallL, wallR);
   const back = S("path", { fill: deep }, svg);
   const under = S("g", undefined, svg);
@@ -108,6 +111,27 @@ function startingBlock(parent: Element, x: number, topY: number, num: string) {
   return { g, plate, lamp };
 }
 
+// a small mark in the spirit of the club logo (not the logo itself)
+function clubMark(parent: Element, x: number, y: number, s: number, color = CLUB_BLUE, dot = CLUB_CYAN) {
+  const m = S("g", { transform: `translate(${x} ${y}) rotate(20) scale(${s})` }, parent);
+  S("path", { d: "M-6,-6 L6,6 M6,-6 L-6,6", stroke: color, "stroke-width": 3.6, "stroke-linecap": "round", fill: "none" }, m);
+  S("circle", { cx: 7.5, cy: -8.5, r: 2.8, fill: dot }, m);
+}
+
+function drawCap(head: Element, cap: CapStyle) {
+  const clipId = uidOf("cc");
+  S("path", { d: CAP_PATH }, S("clipPath", { id: clipId }, head));
+  S("path", { d: CAP_PATH, fill: cap.base }, head);
+  if (cap.split) {
+    const g = S("g", { "clip-path": `url(#${clipId})` }, head);
+    S("path", { d: CAP_FRONT_HALF, fill: cap.split }, g);
+    S("path", { d: CAP_SEAM, stroke: C.ink, "stroke-width": 0.9, opacity: 0.45, fill: "none" }, g);
+    if (cap.mark) clubMark(g, 4.6, -4.4, 0.36);
+  }
+  S("path", { d: CAP_PATH, fill: "none", stroke: C.ink, "stroke-width": 1.8, "stroke-linejoin": "round" }, head);
+  if (!cap.split) S("path", { d: "M3.6,-6.4 A7.6,7.6 0 0 1 7.1,-2.6", stroke: cap.hi, "stroke-width": 2, "stroke-linecap": "round", fill: "none" }, head);
+}
+
 interface Pose {
   x: number;
   y: number;
@@ -119,35 +143,42 @@ interface Pose {
   legF: number;
   legB: number;
   head: number;
+  hoodie: number; // 0 = swimsuit, 1 = club hoodie and shorts on
 }
 
 // cartoon swimmer facing right; body axis along +x (head end), origin at the hips
-function cartoonSwimmer(parent: Element) {
+function cartoonSwimmer(parent: Element, look: Look) {
   const g = S("g", undefined, parent);
-  const limb = (len: number, w: number, fill: string, end: "hand" | "foot") => {
+  const kit: Element[] = [];
+  const limb = (len: number, w: number, fill: string, end: "hand" | "foot", sleeve: number) => {
     const lg = S("g", undefined, g);
     S("rect", { x: -w / 2, y: -w / 2, width: len + w / 2, height: w, rx: w / 2, fill, stroke: C.ink, "stroke-width": 1.6 }, lg);
     if (end === "hand") S("circle", { cx: len, cy: 0, r: w * 0.66, fill, stroke: C.ink, "stroke-width": 1.5 }, lg);
     else S("ellipse", { cx: len + 2.5, cy: 0, rx: w * 0.78, ry: w * 0.5, fill, stroke: C.ink, "stroke-width": 1.5 }, lg);
+    kit.push(S("rect", { x: -w / 2 - 1, y: -w / 2 - 1, width: sleeve + w / 2 + 1, height: w + 2, rx: (w + 2) / 2, fill: CLUB_BLUE, stroke: C.ink, "stroke-width": 1.5, opacity: 0 }, lg));
     return lg;
   };
-  const legB = limb(27, 9, C.skin2, "foot");
-  const armB = limb(23, 7, C.skin2, "hand");
+  const legB = limb(27, 9, C.skin2, "foot", 11);
+  const armB = limb(23, 7, C.skin2, "hand", 17);
   const torso = S("g", undefined, g);
   S("rect", { x: -8, y: -8.5, width: 37, height: 17, rx: 8.5, fill: C.suit, stroke: C.ink, "stroke-width": 1.8 }, torso);
   S("path", { d: "M-2,-1.5 L22,-1.5", stroke: C.stripe, "stroke-width": 3.2, "stroke-linecap": "round" }, torso);
-  const legF = limb(27, 9, C.skin, "foot");
+  const hoodie = S("g", { opacity: 0 }, torso);
+  kit.push(hoodie);
+  S("ellipse", { cx: 28, cy: -9, rx: 7, ry: 5, fill: CLUB_BLUE_DARK, stroke: C.ink, "stroke-width": 1.5 }, hoodie);
+  S("rect", { x: -10, y: -10.5, width: 40, height: 21, rx: 10.5, fill: CLUB_BLUE, stroke: C.ink, "stroke-width": 1.8 }, hoodie);
+  clubMark(hoodie, 13, 3.5, 0.5, "#ffffff", CLUB_CYAN);
+  const legF = limb(27, 9, C.skin, "foot", 11);
   const head = S("g", undefined, g);
   S("circle", { cx: 0, cy: 0, r: 10.5, fill: C.skin, stroke: C.ink, "stroke-width": 1.8 }, head);
   // the cap covers the top and back of the head (the face looks towards +y in body space)
-  S("path", { d: "M8.66,7.26 A11.3,11.3 0 1 0 -9.79,-5.65 Q-1,1.5 8.66,7.26 Z", fill: C.cap, stroke: C.ink, "stroke-width": 1.8, "stroke-linejoin": "round" }, head);
-  S("path", { d: "M3.6,-6.4 A7.6,7.6 0 0 1 7.1,-2.6", stroke: C.capHi, "stroke-width": 2, "stroke-linecap": "round", fill: "none" }, head);
+  drawCap(head, capOf(look.cap));
   S("path", { d: "M9.9,3.2 A10.4,10.4 0 0 0 -5,-9.1", stroke: C.ink, "stroke-width": 1.5, fill: "none", opacity: 0.9 }, head);
   S("ellipse", { cx: 4.4, cy: 6.4, rx: 3.9, ry: 2.8, transform: "rotate(-30 4.4 6.4)", fill: C.lens, stroke: C.ink, "stroke-width": 1.2 }, head);
   S("circle", { cx: 5.6, cy: 5.6, r: 1, fill: "#bff3ff" }, head);
   S("path", { d: "M-4.4,4.6 Q-3.6,7.6 -0.8,7.9", stroke: C.ink, "stroke-width": 1.4, fill: "none", "stroke-linecap": "round" }, head);
-  const armF = limb(23, 7, C.skin, "hand");
-  const p: Pose = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, armF: 0, armB: 0, legF: 180, legB: 182, head: 0 };
+  const armF = limb(23, 7, C.skin, "hand", 17);
+  const p: Pose = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, armF: 0, armB: 0, legF: 180, legB: 182, head: 0, hoodie: 0 };
   const api = {
     p,
     set(q: Partial<Pose>) {
@@ -158,6 +189,7 @@ function cartoonSwimmer(parent: Element) {
       armB.setAttribute("transform", `translate(23 -1.5) rotate(${f2(p.armB)})`);
       armF.setAttribute("transform", `translate(23 1.5) rotate(${f2(p.armF)})`);
       head.setAttribute("transform", `translate(39 0) rotate(${f2(p.head)})`);
+      for (const k of kit) k.setAttribute("opacity", f2(p.hoodie));
     },
     // world position of the leading hand, for splash timing
     hand(): [number, number] {
@@ -215,11 +247,11 @@ export interface DiveParams {
   lane: string; // number shown on the starting block
 }
 
-export const diveScene = ({ lane }: DiveParams): SceneFactory => (st) => {
+export const diveScene = ({ lane }: DiveParams, look: Look): SceneFactory => (st) => {
   const pool = cartoonPool(st, { y0: 172, wallL: 44 });
   deckWall(st, pool.actors, -2, 170, 46);
   const block = startingBlock(pool.actors, 10, 137, lane);
-  const sw = cartoonSwimmer(pool.actors);
+  const sw = cartoonSwimmer(pool.actors, look);
   const beep = S("text", { x: 57, y: 166, "font-size": 11, "font-weight": 800, fill: C.red, stroke: "#ffffff", "stroke-width": 3, "paint-order": "stroke", "font-family": FONT, opacity: 0 }, pool.top);
   beep.textContent = "PÍP!";
   const s: Record<string, boolean> = {};
@@ -277,7 +309,7 @@ export interface PbParams {
   banner: string; // "NOVÝ OSOBÁK · −0,45 s"
 }
 
-export const pbScene = ({ label, time, banner }: PbParams): SceneFactory => (st) => {
+export const pbScene = ({ label, time, banner }: PbParams, look: Look): SceneFactory => (st) => {
   const pool = cartoonPool(st, { y0: 174, wallR: 356, flags: false });
   deckWall(st, pool.actors, 356, 172, 50);
   const pad = S("rect", { x: 351, y: 160, width: 7, height: 44, rx: 2, fill: "#ffd23f", stroke: C.ink, "stroke-width": 1.4 }, pool.actors);
@@ -300,7 +332,7 @@ export const pbScene = ({ label, time, banner }: PbParams): SceneFactory => (st)
   S("rect", { x: 12, y: 94, width: 182, height: 28, rx: 14, fill: C.gold, stroke: C.ink, "stroke-width": 1.8 }, bannerG);
   const bt = S("text", { x: 103, y: 112.5, "text-anchor": "middle", "font-size": banner.length > 22 ? 10.5 : 12, "font-weight": 800, fill: "#4a2c00", "font-family": FONT }, bannerG);
   bt.textContent = banner;
-  const sw = cartoonSwimmer(pool.actors);
+  const sw = cartoonSwimmer(pool.actors, look);
   const s: Record<string, boolean> = {};
   const n: Record<string, number> = {};
   return {
@@ -352,7 +384,7 @@ export interface ReserveParams {
   lane: string;
 }
 
-export const reserveScene = ({ small, front, back, lane }: ReserveParams): SceneFactory => (st) => {
+export const reserveScene = ({ small, front, back, lane }: ReserveParams, look: Look): SceneFactory => (st) => {
   const pool = cartoonPool(st, { y0: 206, wallL: 250, flags: false });
   const deck = S("g", undefined, st.svg);
   S("rect", { x: -2, y: 200, width: 254, height: 102, fill: "#e3f2f7", stroke: C.ink, "stroke-width": 1.6 }, deck);
@@ -377,7 +409,7 @@ export const reserveScene = ({ small, front, back, lane }: ReserveParams): Scene
     cardBig.textContent = isFront ? front : back;
   };
   setCard(true);
-  const sw = cartoonSwimmer(pool.actors);
+  const sw = cartoonSwimmer(pool.actors, look);
   const SIT = { x: 72, y: 172, rot: -90, armF: 158, armB: 164, legF: 118, legB: 124, head: 0, sx: 1, sy: 1 };
   const s: Record<string, boolean> = {};
   return {
@@ -391,14 +423,18 @@ export const reserveScene = ({ small, front, back, lane }: ReserveParams): Scene
       if (t < 1120 && flipped) setCard(true);
       card.setAttribute("transform", `translate(0 43) scale(1 ${f2(Math.max(0.02, sc))}) translate(0 -43)`);
       once(s, "spark", !still && t >= 1350, () => sparkles(st, 106, 43, 12, "#9ff0ff"));
+      once(s, "poof", !still && t >= 1520, () => {
+        sparkles(st, 72, 128, 8, "#ffffff");
+        sparkles(st, 72, 128, 8, CLUB_CYAN);
+      });
       if (t < 1500) {
         const sway = Math.sin(t / 240) * 7;
-        sw.set({ ...SIT, legF: SIT.legF + sway, legB: SIT.legB - sway });
+        sw.set({ ...SIT, legF: SIT.legF + sway, legB: SIT.legB - sway, hoodie: 1 });
       } else if (t < 2350) {
         const u = seg(t, 1500, 1700);
         const hop = t > 1700 ? Math.abs(Math.sin(((t - 1700) / 650) * Math.PI * 2)) : 0;
         const land = t > 1700 ? Math.max(0, Math.cos(((t - 1700) / 650) * Math.PI * 2)) : 0;
-        sw.set({ x: 72, y: lerp(172, 156, u) - 10 * hop, rot: -90, armF: lerp(158, 4, E.out(u)), armB: lerp(164, -6, E.out(u)), legF: lerp(118, 176, u), legB: lerp(124, 184, u), head: 0, sx: 1 - 0.05 * land * (1 - hop), sy: 1 + 0.06 * land * (1 - hop) });
+        sw.set({ hoodie: 1 - seg(t, 1500, 1680), x: 72, y: lerp(172, 156, u) - 10 * hop, rot: -90, armF: lerp(158, 4, E.out(u)), armB: lerp(164, -6, E.out(u)), legF: lerp(118, 176, u), legB: lerp(124, 184, u), head: 0, sx: 1 - 0.05 * land * (1 - hop), sy: 1 + 0.06 * land * (1 - hop) });
       } else if (t < 3050) {
         const u = seg(t, 2350, 3050);
         sw.set({ x: lerp(72, 246, u), y: lerp(156, 129, u) - 24 * 4 * u * (1 - u), rot: lerp(-90, 32, E.inOut(u)), armF: lerp(4, 30, u), armB: lerp(-6, 34, u), legF: lerp(176, 68, E.inOut(u)), legB: lerp(184, 72, E.inOut(u)), head: lerp(0, -38, u), sx: 1, sy: 1 });
@@ -418,52 +454,72 @@ export const reserveScene = ({ small, front, back, lane }: ReserveParams): Scene
 export interface MedalParams {
   place: 1 | 2 | 3;
   caption: string; // "3. místo v ročníku 2016"
+  sub?: string; // "50 m znak"
 }
 
-const MEDAL = { 1: ["#ffd84d", "#c99400"], 2: ["#e6eef3", "#93a6b2"], 3: ["#f0a76b", "#a85a24"] } as const;
+const MEDAL = { 1: ["#ffd84d", "#a87b00"], 2: ["#eef3f6", "#7d909c"], 3: ["#f0a76b", "#9a4f1c"] } as const;
 
-export const medalScene = ({ place, caption }: MedalParams): SceneFactory => (st) => {
-  const pool = cartoonPool(st, { y0: 196, flags: true });
-  const sw = cartoonSwimmer(pool.actors);
+export const medalScene = ({ place, caption, sub }: MedalParams, look: Look): SceneFactory => (st) => {
+  const svg = st.svg;
+  const defs = S("defs", undefined, svg);
+  hallBackdrop(svg, defs, true);
+  // the pool behind the podium
+  S("rect", { x: -2, y: 204, width: 404, height: 28, fill: "#3cc0e4", stroke: C.ink, "stroke-width": 1.2 }, svg);
+  for (let x = 6, i = 0; x < 400; x += 13, i++) S("ellipse", { cx: x, cy: 205, rx: 5.2, ry: 3, fill: x < 60 || x > 340 ? C.red : i % 2 ? C.white : C.blue, stroke: C.ink, "stroke-width": 0.9 }, svg);
+  S("rect", { x: -2, y: 230, width: 404, height: 72, fill: "#e3f2f7", stroke: C.ink, "stroke-width": 1.6 }, svg);
+  const steps = [
+    { n: 2, x: 72, w: 86, top: 184 },
+    { n: 1, x: 158, w: 86, top: 162 },
+    { n: 3, x: 244, w: 86, top: 198 },
+  ];
+  for (const st2 of steps) {
+    S("rect", { x: st2.x, y: st2.top, width: st2.w, height: 232 - st2.top, fill: "#ffffff", stroke: C.ink, "stroke-width": 1.8 }, svg);
+    const tx = S("text", { x: st2.x + st2.w / 2, y: st2.top + (232 - st2.top) / 2 + 8, "text-anchor": "middle", "font-size": 22, "font-weight": 800, fill: CLUB_BLUE, "font-family": "Bricolage Grotesque, Lexend, system-ui, sans-serif" }, svg);
+    tx.textContent = String(st2.n);
+  }
+  const mine = steps.find((x) => x.n === place) ?? steps[2];
+  const cx = mine.x + mine.w / 2 - 4;
+  const hipsY = mine.top - 43;
+  const actors = S("g", undefined, svg);
+  const top = S("g", undefined, svg);
+  const sw = cartoonSwimmer(actors, look);
   const [light, dark] = MEDAL[place];
-  const medal = S("g", undefined, pool.top);
-  S("path", { d: "M-20,-120 L-6,-30 L6,-30 L20,-120 L8,-120 L0,-60 L-8,-120 Z", fill: "#0e97bf", stroke: C.ink, "stroke-width": 1.6, "stroke-linejoin": "round" }, medal);
-  S("path", { d: "M-8,-120 L0,-60 L8,-120", fill: "#ffffff", stroke: "none" }, medal);
-  S("circle", { cx: 0, cy: 0, r: 34, fill: light, stroke: C.ink, "stroke-width": 2.2 }, medal);
-  S("circle", { cx: 0, cy: 0, r: 25, fill: "none", stroke: dark, "stroke-width": 3, opacity: 0.6 }, medal);
-  S("path", { d: "M-22,-14 A26,26 0 0 1 -6,-25", stroke: "#ffffff", "stroke-width": 4, "stroke-linecap": "round", fill: "none", opacity: 0.7 }, medal);
-  const num = S("text", { x: 0, y: 12, "text-anchor": "middle", "font-size": 32, "font-weight": 800, fill: dark, "font-family": "Bricolage Grotesque, Lexend, system-ui, sans-serif" }, medal);
-  num.textContent = `${place}.`;
-  const cap = S("g", { opacity: 0 }, pool.top);
-  const cw = Math.min(220, 24 + caption.length * 7.4);
-  S("rect", { x: 120 - cw / 2, y: 152, width: cw, height: 28, rx: 14, fill: "#ffffff", stroke: C.ink, "stroke-width": 1.8 }, cap);
-  const ct = S("text", { x: 120, y: 170.5, "text-anchor": "middle", "font-size": 12, "font-weight": 800, fill: C.ink, "font-family": FONT }, cap);
+  const medal = S("g", undefined, top);
+  S("path", { d: "M-8,-30 L-2,-10 M8,-30 L2,-10", stroke: CLUB_CYAN, "stroke-width": 4.2, "stroke-linecap": "round", fill: "none" }, medal);
+  S("circle", { cx: 0, cy: 0, r: 11.5, fill: light, stroke: C.ink, "stroke-width": 1.8 }, medal);
+  S("circle", { cx: 0, cy: 0, r: 8, fill: "none", stroke: dark, "stroke-width": 1.6, opacity: 0.55 }, medal);
+  const num = S("text", { x: 0, y: 4.6, "text-anchor": "middle", "font-size": 12, "font-weight": 800, fill: dark, "font-family": "Bricolage Grotesque, Lexend, system-ui, sans-serif" }, medal);
+  num.textContent = String(place);
+  const cap = S("g", { opacity: 0 }, top);
+  const cw = Math.min(250, 30 + Math.max(caption.length * 7.4, (sub ?? "").length * 6.2));
+  S("rect", { x: 14, y: 70, width: cw, height: sub ? 44 : 30, rx: 14, fill: "#ffffff", stroke: C.ink, "stroke-width": 1.8 }, cap);
+  const ct = S("text", { x: 14 + cw / 2, y: 90, "text-anchor": "middle", "font-size": 12.5, "font-weight": 800, fill: C.ink, "font-family": FONT }, cap);
   ct.textContent = caption;
+  if (sub) {
+    const cs = S("text", { x: 14 + cw / 2, y: 106, "text-anchor": "middle", "font-size": 10.5, "font-weight": 600, fill: CLUB_BLUE, "font-family": FONT }, cap);
+    cs.textContent = sub;
+  }
   const s: Record<string, boolean> = {};
   return {
-    end: 4600,
-    rest: 4600,
+    end: 4800,
+    rest: 4800,
     update(t, _k, still) {
-      // she pops up from the water and waves
-      const u = E.back(seg(t, 0, 600));
-      const wave = t > 600 ? Math.sin((t - 600) / 140) * 16 : 0;
-      sw.set({ x: 290, y: lerp(232, 194, u), rot: -62, armF: -40 + wave, armB: 120, legF: 150 + Math.sin(t / 150) * 8, legB: 160 - Math.sin(t / 150) * 8, head: 20, sx: 1, sy: 1 });
-      // the medal drops in on its ribbon and swings out
-      const d = seg(t, 400, 1250);
-      const y = still ? 92 : lerp(-60, 92, E.back(d));
-      const swing = t > 1250 ? Math.sin((t - 1250) / 260) * 9 * Math.exp(-(t - 1250) / 1100) : 0;
-      medal.setAttribute("transform", `translate(120 ${f2(y)}) rotate(${f2(swing)})`);
-      const cp = seg(t, 1150, 1450);
+      // a little hop onto her step, then waving
+      const hop = still ? 1 : E.back(seg(t, 0, 450));
+      const wave = t > 1300 ? Math.sin((t - 1300) / 150) * 20 : 0;
+      sw.set({ x: cx, y: lerp(hipsY + 14, hipsY, hop) - Math.sin(Math.PI * seg(t, 0, 450)) * 12, rot: -90, armF: -14 + wave, armB: 172, legF: 178, legB: 182, head: 0, hoodie: 1, sx: 1, sy: 1 });
+      // the medal drops onto her chest
+      const d = still ? 1 : seg(t, 450, 1250);
+      const my = lerp(-50, hipsY - 18, E.back(d));
+      const swing = t > 1250 ? Math.sin((t - 1250) / 230) * 10 * Math.exp(-(t - 1250) / 900) : 0;
+      medal.setAttribute("transform", `translate(${f2(cx + 11)} ${f2(my)}) rotate(${f2(swing)})`);
+      const cp = still ? 1 : seg(t, 1150, 1450);
       cap.setAttribute("opacity", f2(cp));
-      cap.setAttribute("transform", `translate(120 166) scale(${f2(Math.max(0.01, E.back(cp)))}) translate(-120 -166)`);
-      once(s, "pop", !still && t >= 300, () => splashAt(st, 300, st.water!.y(300), 18, 0.7));
+      cap.setAttribute("transform", `translate(${f2(14 + cw / 2)} 92) scale(${f2(Math.max(0.01, E.back(cp)))}) translate(${f2(-14 - cw / 2)} -92)`);
       once(s, "party", !still && t >= 1250, () => {
-        confetti(st, 120, 70, 70);
-        sparkles(st, 120, 92, 14);
+        confetti(st, cx, 60, 80);
+        sparkles(st, cx + 11, hipsY - 18, 14);
       });
-    },
-    draw() {
-      pool.draw(st.t);
     },
   } satisfies Scene;
 };

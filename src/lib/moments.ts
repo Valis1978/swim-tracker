@@ -68,7 +68,7 @@ export function medalMoment(i: MomentInput): Moment | null {
       title: place === 1 ? "Vyhrála jsi!" : `${place}. místo!`,
       text: `${eventName(e.discipline)} na závodě ${m.comp.title}: ${place}. místo v ročníku${i.birthYear ? ` ${i.birthYear}` : ""}.`,
       href: `/zavod/${m.id}`,
-      params: { place, caption: `${place}. místo v ročníku${i.birthYear ? ` ${i.birthYear}` : ""}` },
+      params: { place, caption: `${place}. místo v ročníku${i.birthYear ? ` ${i.birthYear}` : ""}`, sub: eventName(e.discipline) },
     };
   }
   return null;

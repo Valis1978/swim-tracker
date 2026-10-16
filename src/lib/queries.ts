@@ -3,6 +3,7 @@ import type { EntrySnapshot, HistoryItem } from "./entries";
 import type { PublicDoc } from "./sync_entries";
 import type { CspsHalfDay } from "./csps";
 import { niceTitle } from "./present";
+import { DEFAULT_CAP, isCapKey, type Look } from "./anim/look";
 
 export async function getPrimary(): Promise<Swimmer | null> {
   const { data } = await db().from("swim_swimmers").select("*").eq("is_primary", true).eq("active", true).limit(1).maybeSingle();
@@ -230,4 +231,10 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 export async function kidSeesPlaces(): Promise<boolean> {
   const v = await getSetting<{ on?: boolean }>("kid_show_places", { on: true });
   return v.on !== false;
+}
+
+// Viki's cartoon look (the cap she picked); club cap by default.
+export async function getLook(): Promise<Look> {
+  const v = await getSetting<{ cap?: unknown }>("avatar", {});
+  return { cap: isCapKey(v.cap) ? v.cap : DEFAULT_CAP };
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import MomentCard from "@/components/anim/MomentCard";
+import CapPicker from "@/components/anim/CapPicker";
 import { ChevronGlyph, MedalGlyph, SparkGlyph, StrokeGlyph } from "@/components/Glyphs";
 import { SectionTitle, StatusChip, ToneDot, WaterHero } from "@/components/Pool";
 import { MeetCard } from "@/components/Race";
@@ -8,7 +9,7 @@ import { requireRole } from "@/lib/auth";
 import { changeText, type Tone } from "@/lib/entries";
 import { fmtTime } from "@/lib/format";
 import { eventName, placeView, toneOf } from "@/lib/present";
-import { getBadges, getCompetitionsByIds, getPrimary, getResults, getSwimmerEntries, kidSeesPlaces, type EntryRow } from "@/lib/queries";
+import { getBadges, getCompetitionsByIds, getLook, getPrimary, getResults, getSwimmerEntries, kidSeesPlaces, type EntryRow } from "@/lib/queries";
 import { computeRecords, pbFlags } from "@/lib/records";
 import { pickHomeMoment, type Moment } from "@/lib/moments";
 import { STROKE_META, strokeOf } from "@/lib/strokes";
@@ -32,7 +33,7 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
     );
   }
   const today = pragueToday();
-  const [results, badges, entries, kidPlaces] = await Promise.all([getResults(primary.id), getBadges(primary.id), getSwimmerEntries(primary.id), kidSeesPlaces()]);
+  const [results, badges, entries, kidPlaces, look] = await Promise.all([getResults(primary.id), getBadges(primary.id), getSwimmerEntries(primary.id), kidSeesPlaces(), getLook()]);
 
   // ---- meets
   const byMeet = new Map<number, EntryRow[]>();
@@ -141,7 +142,7 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
         </div>
       </WaterHero>
 
-      {moment && <MomentCard moment={moment} />}
+      {moment && <MomentCard moment={moment} look={look} />}
 
       {next && (
         <section>
@@ -270,6 +271,8 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
           <p className="mt-2 text-xs text-pool-900/45">Od tvého úplně prvního startu k rekordu (krátký bazén).</p>
         </section>
       )}
+
+      <CapPicker initial={look.cap} />
 
       {badges.length > 0 && (
         <section>

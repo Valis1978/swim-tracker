@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-16 (čepice a oddílová výbava)
+
+### CZ
+- **Viki si vybírá čepici** své postavičky na domovské obrazovce: oddílová půlená modrobílá (výchozí) nebo modrá, bílá,
+  červená, žlutá, růžová, tyrkysová, fialová. Volba platí ve všech animacích i v přehrání závodu.
+- **Oddílová výbava OSP Hodonín** podle fotek z webu oddílu: královská modrá mikina s bílou značkou a trenýrky
+  na lavičce náhradníků (po postupu ji shodí), plavky v klubové modré.
+- **Medaile na stupních vítězů** v oddílové mikině místo mávání z vody.
+- Nastavení → **Ukázky animací** pro rodiče.
+
+### EN
+- Kid-selectable cap (club half-and-half cap by default, 7 bright colours) used by every animation and the replay;
+  `/api/avatar` is the only API the kid role may call (validated allowlist).
+- Club kit from the club's own photos: royal blue hoodie and shorts on the reserves' bench, club-blue swimsuit.
+- Medal moment on a podium; parent preview page of all animations.
+
 ## 2026-10-16 (animace)
 
 ### CZ

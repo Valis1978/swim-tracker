@@ -14,7 +14,7 @@ import { fmtTime } from "@/lib/format";
 import { eventName, halfDayName, halfDayTimes, meetSummary, toneOf } from "@/lib/present";
 
 const NICK = "Viki";
-import { getCompetition, getCompetitionEntries, getPrimary, getResults, kidSeesPlaces, type EntryRow } from "@/lib/queries";
+import { getCompetition, getCompetitionEntries, getLook, getPrimary, getResults, kidSeesPlaces, type EntryRow } from "@/lib/queries";
 import { pbFlags } from "@/lib/records";
 import { pragueNow, relativeDay, shortDate, weekday } from "@/lib/time";
 
@@ -31,7 +31,7 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
 
   const [comp, primary] = await Promise.all([getCompetition(cid), getPrimary()]);
   if (!comp || !primary) notFound();
-  const [all, results, kidPlaces] = await Promise.all([getCompetitionEntries(cid), getResults(primary.id), kidSeesPlaces()]);
+  const [all, results, kidPlaces, look] = await Promise.all([getCompetitionEntries(cid), getResults(primary.id), kidSeesPlaces(), getLook()]);
   const mine = all.filter((e) => e.swimmer_id === primary.id).sort((a, b) => a.event_no - b.event_no);
   if (!mine.length && !parent) notFound(); // the kid view only knows her own races
 
@@ -73,6 +73,7 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
       ghost: prev ? prev.time_ms : null,
       ghostLabel: prev ? `rekord ${shortDate(prev.swim_date)}` : null,
       lane: e.lane,
+      cap: look.cap,
     };
   };
   const dive = diveMoment(
@@ -131,7 +132,7 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
         </div>
       </WaterHero>
 
-      {dive && <MomentCard moment={{ ...dive, href: undefined }} />}
+      {dive && <MomentCard moment={{ ...dive, href: undefined }} look={look} />}
 
       <section className="animate-rise rounded-3xl border border-pool-100 bg-white px-3 pb-3 pt-4 shadow-[0_6px_18px_-12px_rgb(8_42_60/0.45)]">
         <RaceStepper steps={steps} />

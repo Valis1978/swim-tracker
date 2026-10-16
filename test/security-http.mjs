@@ -43,6 +43,11 @@ try {
   const kidPage = await request('/prehled', { headers: { cookie: cookie('kid') } });
   assert.equal(kidPage.status, 307);
   assert.equal(new URL(kidPage.headers.get('location'), base).pathname, '/viki');
+  // the kid may choose her cap (validated in the handler, before any data call) but nothing else
+  const avatar = (headers, body) => request('/api/avatar', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
+  assert.equal((await avatar({}, '{"cap":"klub"}')).status, 401);
+  assert.equal((await avatar({ cookie: cookie('kid') }, '{"cap":"<script>"}')).status, 400);
+  assert.equal((await avatar({ cookie: cookie('kid') }, '{"cap":42}')).status, 400);
   // kid may open race detail pages, never parent-only paths dressed up as one
   const kidRace = await request('/zavod/abc', { headers: { cookie: cookie('kid') } });
   assert.equal(kidRace.status, 307);

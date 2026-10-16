@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import Nav from "@/components/Nav";
 import { getSwimmers, kidSeesPlaces } from "@/lib/queries";
@@ -17,6 +18,13 @@ export default async function NastaveniPage() {
     <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pb-32 pt-6">
       <h1 className="text-[1.9rem] font-extrabold text-pool-900">Nastavení</h1>
       <PlacesToggle initial={places} />
+      <Link href="/nastaveni/animace" className="flex items-center justify-between rounded-3xl border border-pool-100 bg-white p-4 hover:bg-pool-50">
+        <span>
+          <span className="block font-bold text-pool-900">Ukázky animací</span>
+          <span className="block text-xs text-pool-900/55">skok, náhradnice, osobák, medaile, závod znovu</span>
+        </span>
+        <span aria-hidden="true" className="text-pool-300">→</span>
+      </Link>
       <WatchlistManager
         swimmers={swimmers.map((s) => ({
           id: s.id,

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Stage, type SceneFactory } from "@/lib/anim/engine";
 import { diveScene, medalScene, pbScene, reserveScene } from "@/lib/anim/cartoon";
 import type { Moment } from "@/lib/moments";
+import type { Look } from "@/lib/anim/look";
 
 const SEEN = "swim:moments-seen";
 
@@ -27,22 +28,22 @@ function markSeen(key: string) {
   }
 }
 
-function sceneOf(m: Moment): SceneFactory {
+function sceneOf(m: Moment, look: Look): SceneFactory {
   switch (m.kind) {
     case "pb":
-      return pbScene(m.params);
+      return pbScene(m.params, look);
     case "medal":
-      return medalScene(m.params);
+      return medalScene(m.params, look);
     case "reserve":
-      return reserveScene(m.params);
+      return reserveScene(m.params, look);
     case "dive":
-      return diveScene(m.params);
+      return diveScene(m.params, look);
   }
 }
 
 const noop = () => () => {};
 
-export default function MomentCard({ moment }: { moment: Moment }) {
+export default function MomentCard({ moment, look }: { moment: Moment; look: Look }) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const mounted = useSyncExternalStore(noop, () => true, () => false);
@@ -56,13 +57,13 @@ export default function MomentCard({ moment }: { moment: Moment }) {
     const st = new Stage(host.current);
     stage.current = st;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    st.play(sceneOf(moment), { animate: !reduced || open });
+    st.play(sceneOf(moment, look), { animate: !reduced || open });
     markSeen(moment.key);
     return () => {
       st.destroy();
       stage.current = null;
     };
-  }, [show, moment, open]);
+  }, [show, moment, open, look]);
 
   if (!mounted) return null;
 
@@ -101,7 +102,7 @@ export default function MomentCard({ moment }: { moment: Moment }) {
         </div>
         <button
           type="button"
-          onClick={() => stage.current?.play(sceneOf(moment))}
+          onClick={() => stage.current?.play(sceneOf(moment, look))}
           className="shrink-0 rounded-full border border-pool-200 px-3 py-1.5 text-sm font-semibold text-pool-700 transition hover:bg-pool-50"
         >
           Znovu

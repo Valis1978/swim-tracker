@@ -529,7 +529,7 @@ export const medalScene = ({ place, caption, sub }: MedalParams, look: Look): Sc
   const num = S("text", { x: 0, y: 4.6, "text-anchor": "middle", "font-size": 12, "font-weight": 800, fill: dark, "font-family": "Bricolage Grotesque, Lexend, system-ui, sans-serif" }, medal);
   num.textContent = String(place);
   const cap = S("g", { opacity: 0 }, top);
-  const cw = Math.min(250, 30 + Math.max(caption.length * 7.4, (sub ?? "").length * 6.2));
+  const cw = Math.min(260, 36 + Math.max(caption.length * 7.6, (sub ?? "").length * 6.9));
   S("rect", { x: 14, y: 70, width: cw, height: sub ? 44 : 30, rx: 14, fill: "#ffffff", stroke: C.ink, "stroke-width": 1.8 }, cap);
   const ct = S("text", { x: 14 + cw / 2, y: 90, "text-anchor": "middle", "font-size": 12.5, "font-weight": 800, fill: C.ink, "font-family": FONT }, cap);
   ct.textContent = caption;

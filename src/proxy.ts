@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, roleForToken } from "@/lib/session";
 
-const KID_ALLOWED = ["/viki", "/zavody", "/dalkove", "/rekordy"];
+const KID_ALLOWED = ["/viki", "/zavody", "/dalkove", "/rekordy", "/animace"];
 // race detail pages are kid-readable; the page itself only shows her own races
 const KID_PATTERNS = [/^\/zavod\/\d{1,9}$/];
 // the only API the kid role may call (choosing her cap); the handler validates the value

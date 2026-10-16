@@ -29,7 +29,7 @@ try {
   }
   assert.ok(ready, 'App failed to start: ' + output.slice(-2000));
 
-  for (const path of ['/viki', '/zavody', '/dalkove', '/rekordy', '/zavod/1', '/prehled', '/nastaveni', '/plavec/synthetic']) {
+  for (const path of ['/viki', '/zavody', '/dalkove', '/rekordy', '/animace', '/zavod/1', '/prehled', '/nastaveni', '/plavec/synthetic']) {
     const res = await request(path);
     assert.equal(res.status, 307, path);
     assert.equal(new URL(res.headers.get('location'), base).pathname, '/pin');

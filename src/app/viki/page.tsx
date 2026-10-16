@@ -273,6 +273,13 @@ export default async function VikiPage({ searchParams }: { searchParams: Promise
       )}
 
       <CapPicker initial={look.cap} />
+      <Link href="/animace" className="-mt-2 flex items-center justify-between rounded-3xl bg-deep px-5 py-4 text-white shadow-[0_14px_30px_-18px_rgb(5_39_58/0.7)] transition hover:bg-pool-800">
+        <span>
+          <span className="block text-lg font-extrabold leading-tight">Pustit si všechny animace</span>
+          <span className="block text-xs text-pool-100/80">skok, náhradnice, osobák, medaile, závod znovu</span>
+        </span>
+        <ChevronGlyph size={22} className="shrink-0 text-pool-200" />
+      </Link>
 
       {badges.length > 0 && (
         <section>

@@ -7,7 +7,7 @@ import { availableModes, replayScene, type ReplayMode, type ReplayParams } from 
 const LABEL: Record<ReplayMode, string> = { ghost: "Proti rekordu", heat: "Rozplavba", year: "Ročník" };
 
 // "Přehrát závod": her race from above — against her previous record, in her real heat, or among her birth year
-export default function RaceReplay({ params }: { params: ReplayParams }) {
+export default function RaceReplay({ params, label = "Přehrát závod" }: { params: ReplayParams; label?: string }) {
   const host = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const modes = availableModes(params);
@@ -35,7 +35,7 @@ export default function RaceReplay({ params }: { params: ReplayParams }) {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M8 5.5v13l11-6.5z" />
         </svg>
-        Přehrát závod
+        {label}
       </button>
     );
   }

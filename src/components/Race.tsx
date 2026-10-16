@@ -4,7 +4,7 @@ import type { ReplayParams } from "@/lib/anim/replay";
 import Sparkline from "@/components/Sparkline";
 import { ChevronGlyph, MedalGlyph, PinGlyph, SparkGlyph, StrokeGlyph } from "@/components/Glyphs";
 import { LaneMap, StatusChip, StatusRope } from "@/components/Pool";
-import { statusLabel, type EntrySnapshot } from "@/lib/entries";
+import { statusLabel, type EntrySnapshot, type RaceField } from "@/lib/entries";
 import { fmtDate, fmtDelta, fmtTime } from "@/lib/format";
 import { eventName, meetSummary, outHint, placeView, toneOf } from "@/lib/present";
 import type { CompetitionRow, EntryRow } from "@/lib/queries";
@@ -57,6 +57,8 @@ export function EventCard({
   delay = 0,
   firstEver = false,
   replay,
+  lineup,
+  preview,
 }: {
   entry: EntryRow;
   birthYear: number | null;
@@ -66,6 +68,8 @@ export function EventCard({
   delay?: number;
   firstEver?: boolean;
   replay?: ReplayParams;
+  lineup?: RaceField | null; // her heat from the start list (before the race)
+  preview?: ReplayParams; // the heat swum at everyone's entry times
 }) {
   const st = statusLabel(entry);
   const stroke = strokeOf(entry.discipline);
@@ -138,6 +142,24 @@ export function EventCard({
           </div>
         </div>
       )}
+      {lineup && lineup.racers.length > 1 && (
+        <div className="mt-3 rounded-2xl ring-1 ring-pool-100">
+          <p className="px-3 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-pool-900/45">
+            Tvoje rozplavba · {lineup.racers.length} {lineup.racers.length < 5 ? "plavkyně" : "plavkyň"}
+          </p>
+          <ul className="divide-y divide-pool-50 px-3 pb-1">
+            {lineup.racers.map((r) => (
+              <li key={r.lane} className={`flex items-center gap-3 py-1.5 text-sm ${r.me ? "font-bold text-pool-900" : "text-pool-900/70"}`}>
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md text-xs font-bold ${r.me ? "bg-[#ffe07a] text-[#7a4b00]" : "bg-pool-50 text-pool-700"}`}>{r.lane}</span>
+                <span className="w-12 shrink-0">{r.me ? "ty" : r.year || "—"}</span>
+                <span className="min-w-0 flex-1 truncate">{r.club}</span>
+                <span className="nums shrink-0">{r.time > 0 ? fmtTime(r.time) : "bez času"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preview && <RaceReplay params={preview} label="Jak by to dopadlo podle přihlášených časů" />}
     </article>
   );
 }

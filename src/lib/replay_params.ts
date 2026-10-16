@@ -34,3 +34,26 @@ export function replayParamsFor(
     birthYear: o.birthYear,
   };
 }
+
+// Before the race: her heat from the start list, everyone swimming her entry time ("jak by to mohlo dopadnout").
+export function previewParamsFor(e: EntryRow, comp: CompetitionRow, o: { nick: string; cap: CapKey; birthYear: number | null }): ReplayParams | undefined {
+  if (e.status !== "drawn" || !e.field?.pre) return undefined;
+  const me = e.field.racers.find((r) => r.me);
+  if (!me || me.time <= 0 || e.field.racers.filter((r) => r.time > 0).length < 2) return undefined;
+  return {
+    title: eventName(e.discipline),
+    distance: distanceOf(e.discipline),
+    pool: comp.pool_length === 50 ? 50 : 25,
+    me: me.time,
+    meLabel: `${o.nick} · přihlášený čas`,
+    ghost: null,
+    ghostLabel: null,
+    lane: e.lane,
+    cap: o.cap,
+    heatNo: e.field.heat,
+    heat: e.field.racers,
+    year: null,
+    birthYear: o.birthYear,
+    predicted: true,
+  };
+}

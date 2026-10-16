@@ -6,7 +6,7 @@ import { RaceStepper, SectionTitle, StatusChip, StatusRope, WaterHero } from "@/
 import { EventCard, PoolBadge } from "@/components/Race";
 import MomentCard from "@/components/anim/MomentCard";
 import { diveMoment } from "@/lib/moments";
-import { replayParamsFor } from "@/lib/replay_params";
+import { previewParamsFor, replayParamsFor } from "@/lib/replay_params";
 import { requireRole } from "@/lib/auth";
 import { raceSteps, statusLabel } from "@/lib/entries";
 import { fmtTime } from "@/lib/format";
@@ -141,7 +141,10 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
               </div>
               <div className="flex flex-col gap-3">
                 {list.map((e) => (
-                  <EventCard key={e.id} entry={e} birthYear={primary.birth_year} parent={parent} kidPlaces={kidPlaces} pb={pbOf(e)} delay={(order.get(e.id) ?? 0) * 60 + 60} firstEver={!swumBefore.has(e.discipline)} replay={replayOf(e)} />
+                  <EventCard key={e.id} entry={e} birthYear={primary.birth_year} parent={parent} kidPlaces={kidPlaces} pb={pbOf(e)} delay={(order.get(e.id) ?? 0) * 60 + 60} firstEver={!swumBefore.has(e.discipline)} replay={replayOf(e)}
+                    lineup={(parent || kidPlaces) && e.status === "drawn" && e.field?.pre ? e.field : null}
+                    preview={parent || kidPlaces ? previewParamsFor(e, comp, { nick: NICK, cap: look.cap, birthYear: primary.birth_year }) : undefined}
+                  />
                 ))}
               </div>
             </section>

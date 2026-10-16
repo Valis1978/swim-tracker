@@ -22,6 +22,7 @@ export interface ReplayParams {
   heat?: { lane: number; year: number; time: number; me: boolean }[] | null;
   year?: number[] | null; // sorted times of swimmers born the same year
   birthYear?: number | null;
+  predicted?: boolean; // before the race: everyone swims her entry time
 }
 
 export function fmtRace(ms: number): string {
@@ -50,10 +51,11 @@ export function positionAt(d: number, pool: number): { m: number; dir: 1 | -1 } 
   return length % 2 === 0 ? { m: into, dir: 1 } : { m: pool - into, dir: -1 };
 }
 
+// her heat first (she sees her rivals straight away), then her previous record, then her birth year
 export function availableModes(p: ReplayParams): ReplayMode[] {
   const out: ReplayMode[] = [];
+  if (p.heat && p.heat.filter((r) => r.time > 0).length > 1) out.push("heat");
   if (p.ghost != null) out.push("ghost");
-  if (p.heat && p.heat.length > 1) out.push("heat");
   if (p.year && p.year.length > 1) out.push("year");
   if (!out.length) out.push("ghost");
   return out;
@@ -71,9 +73,9 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
   const cap = capOf(p.cap);
   let racers: Racer[];
   let lanes: number;
-  if (mode === "heat" && p.heat && p.heat.length > 1) {
+  if (mode === "heat" && p.heat && p.heat.filter((r) => r.time > 0).length > 1) {
     lanes = Math.max(8, ...p.heat.map((r) => r.lane));
-    racers = p.heat.map((r) => ({ lane: r.lane - 1, total: r.time, me: r.me, ghost: false, tag: r.me ? undefined : String(r.year) }));
+    racers = p.heat.filter((r) => r.time > 0).map((r) => ({ lane: r.lane - 1, total: r.time, me: r.me, ghost: false, tag: r.me ? undefined : String(r.year) }));
   } else if (mode === "year" && p.year && p.year.length > 1) {
     lanes = p.year.length;
     let meIdx = p.year.indexOf(p.me);
@@ -287,7 +289,7 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
       c.fillStyle = "rgba(255,255,255,.75)";
       const legend =
         mode === "heat"
-          ? `rozplavba ${p.heatNo ?? ""} · ${racers.length} plavkyň`
+          ? `rozplavba ${p.heatNo ?? ""} · ${p.predicted ? "podle přihlášených časů" : `${racers.length} plavkyň`}`
           : mode === "year"
             ? `ročník ${p.birthYear ?? ""} · ${racers.length} plavkyň`
             : p.ghost != null && p.ghostLabel
@@ -302,7 +304,9 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
         const k = placeOf(meRacer);
         const msg =
           mode === "heat"
-            ? `v rozplavbě ${k}. z ${n}`
+            ? p.predicted
+              ? `podle přihlášených časů ${k}. z ${n}`
+              : `v rozplavbě ${k}. z ${n}`
             : mode === "year"
               ? `v ročníku ${p.birthYear ?? ""}: ${k}. z ${n}`
               : p.ghost == null

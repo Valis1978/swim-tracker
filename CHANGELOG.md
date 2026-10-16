@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-16 (soupeřky)
+
+### CZ
+- **Přehrání závodu začíná rozplavbou**, Viki hned vidí soupeřky ve skutečných drahách; proti rekordu a ročník jsou další záložky.
+- **Soupeřky u nadcházejícího závodu:** po zveřejnění startovky ukáže každá rozlosovaná trať celou rozplavbu (dráha,
+  ročník, oddíl, přihlášený čas) a přehrání „jak by to dopadlo podle přihlášených časů". Bez jmen dětí.
+- Animace pro Viki kdykoli na `/animace` (tlačítko na domovské obrazovce).
+
+### EN
+- Replay opens on the real heat; upcoming drawn races show the whole heat from the OMEGA start list (lane, birth
+  year, club, entry time, no names) and a predicted replay at entry times. Kid-accessible animation gallery.
+
 ## 2026-10-16 (tričko a celé rozplavby)
 
 ### CZ

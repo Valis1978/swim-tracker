@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normDisc, parseSeed, parseAcceptedList, parseOmegaCsv, parseStartListPdf, personKey, rows } from '../src/lib/entry_docs.ts';
+import { normDisc, parseSeed, parseAcceptedList, parseOmegaCsv, parseStartListPdf, personKey, rows, heatLineup } from '../src/lib/entry_docs.ts';
 import { resolveStatus, changeText, raceSteps, changed, snapshot } from '../src/lib/entries.ts';
 
 // Synthetic swimmers only — the repository is public.
@@ -54,6 +54,16 @@ test('OMEGA CSV: heat 0 is a reserve, rows keyed by name + year', () => {
   assert.equal(r.length, 2);
   assert.deepEqual([r[0].key, r[0].eventNo, r[0].disc, r[0].heat, r[0].lane], [ANNA, 3, '100P', 8, 2]);
   assert.equal(r[1].heat, 0);
+});
+
+test('heat lineup: everyone in her heat by lane, with year, club and entry time', () => {
+  const csv = ['999', 'Test meet', '01.01.2026',
+    '8;"50P";1;"NOVÁKOVÁ";"Anna";"2016";"Z";"TEST";00:57,90;0;1;4;01.01.2026;"";""',
+    '8;"50P";2;"SVOBODOVÁ";"Eva";"2015";"Z";"KLUB";00:55,10;0;1;3;01.01.2026;"";""',
+    '8;"50P";3;"DVOŘÁKOVÁ";"Lea";"2016";"Z";"KLUB";-;0;1;5;01.01.2026;"";""',
+    '8;"50P";4;"ČERNÁ";"Ema";"2016";"Z";"JINY";00:50,00;0;2;4;01.01.2026;"";""'].join('\n');
+  const lineup = heatLineup(parseOmegaCsv(csv), 8, 1, ANNA);
+  assert.deepEqual(lineup.map((r) => [r.lane, r.year, r.club, r.seedMs, r.me]), [[3, 2015, 'KLUB', 55100, false], [4, 2016, 'TEST', 57900, true], [5, 2016, 'KLUB', null, false]]);
 });
 
 test('start list PDF: two-column heats and reserves resolve to the right event', () => {

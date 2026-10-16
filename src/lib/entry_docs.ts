@@ -125,6 +125,7 @@ export interface OmegaRow {
   eventNo: number;
   disc: string;
   key: string; // personKey
+  year: number | null;
   club: string;
   seedMs: number | null;
   heat: number;
@@ -140,6 +141,7 @@ export function parseOmegaCsv(text: string): OmegaRow[] {
       eventNo: Number(p[0]),
       disc: normDisc(p[1]),
       key: personKey(`${p[3]} ${p[4]}`, /^\d{4}$/.test(p[5]) ? Number(p[5]) : null),
+      year: /^\d{4}$/.test(p[5]) ? Number(p[5]) : null,
       club: p[7],
       seedMs: parseSeed(p[8]),
       heat: Number(p[10]) || 0,
@@ -147,6 +149,14 @@ export function parseOmegaCsv(text: string): OmegaRow[] {
     });
   }
   return out;
+}
+
+// Her heat from the start list: who swims in which lane, with birth year, club and entry time (no names).
+export function heatLineup(rows: OmegaRow[], eventNo: number, heat: number, meKey: string): { lane: number; year: number; club: string; seedMs: number | null; me: boolean }[] {
+  return rows
+    .filter((r) => r.eventNo === eventNo && r.heat === heat && r.lane > 0)
+    .map((r) => ({ lane: r.lane, year: r.year ?? 0, club: r.club, seedMs: r.seedMs, me: r.key === meKey }))
+    .sort((a, b) => a.lane - b.lane);
 }
 
 // ---- "Startovní listina" PDF ------------------------------------------------

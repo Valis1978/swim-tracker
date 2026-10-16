@@ -11,6 +11,7 @@ import { disciplineLabel, fmtTime } from "./format";
 import { sendTelegram } from "./telegram";
 import { pdfPages } from "./pdf";
 import {
+  heatLineup,
   normDisc,
   parseAcceptedList,
   parseOmegaCsv,
@@ -402,6 +403,25 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
       };
       const { error } = await db().from("swim_entries").upsert(row, { onConflict: "swimmer_id,competition_csps_id,event_no,discipline" });
       if (error) notes.push(`entry ${cid}/${t.eventNo}: ${error.message}`);
+      // before the race: her heat from the start list (lanes, years, clubs, entry times) — replaced by results later
+      if (final.snap.status === "drawn" && final.snap.heat != null && bundle.omega?.length) {
+        const lineup = heatLineup(bundle.omega, t.eventNo, final.snap.heat, key);
+        if (lineup.some((r) => r.me)) {
+          const pre: RaceField = {
+            heat: final.snap.heat,
+            pre: true,
+            racers: lineup.map((r) => ({ lane: r.lane, year: r.year, time: r.seedMs ?? 0, me: r.me, club: r.club })),
+            year: [],
+          };
+          await db()
+            .from("swim_entries")
+            .update({ field: pre })
+            .eq("swimmer_id", t.swimmer.id)
+            .eq("competition_csps_id", cid)
+            .eq("event_no", t.eventNo)
+            .eq("discipline", t.disc);
+        }
+      }
       const catId = t.app?.categoryId ?? t.row?.category_id ?? null;
       const recent = (comp.endDate ?? comp.startDate) >= addDays(today, -2);
       if (catId && (final.snap.status === "swum" || final.snap.status === "dsq") && (!t.row?.places_checked_at || recent || !t.row?.field)) {

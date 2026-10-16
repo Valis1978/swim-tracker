@@ -1,6 +1,13 @@
 export function fmtTime(ms: number | null | undefined): string {
   if (ms == null) return "—";
   if (ms >= 6_000_000) return "DSQ";
+  if (ms >= 3_600_000) {
+    // open water: 1:28:11,9
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60000);
+    const sec = ((ms % 60000) / 1000).toFixed(1).replace(".", ",");
+    return `${h}:${String(m).padStart(2, "0")}:${(ms % 60000) / 1000 < 10 ? "0" : ""}${sec}`;
+  }
   const mins = Math.floor(ms / 60000);
   const secs = (ms % 60000) / 1000;
   const s = secs.toFixed(2).replace(".", ",");

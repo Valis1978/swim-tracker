@@ -1,20 +1,22 @@
 import { requireRole } from "@/lib/auth";
 import Nav from "@/components/Nav";
-import { getSwimmers } from "@/lib/queries";
+import { getSwimmers, kidSeesPlaces } from "@/lib/queries";
 import { db } from "@/lib/db";
 import WatchlistManager from "./WatchlistManager";
+import PlacesToggle from "./PlacesToggle";
 
 export const dynamic = "force-dynamic";
 
 export default async function NastaveniPage() {
   await requireRole(true);
-  const swimmers = await getSwimmers();
+  const [swimmers, places] = await Promise.all([getSwimmers(), kidSeesPlaces()]);
   const { data: lastSync } = await db().from("swim_settings").select("value").eq("key", "last_sync").maybeSingle();
   const lastSyncAt = (lastSync?.value as { at?: string } | null)?.at ?? null;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-pool-800">Nastavení ⚙️</h1>
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pb-32 pt-6">
+      <h1 className="text-[1.9rem] font-extrabold text-pool-900">Nastavení</h1>
+      <PlacesToggle initial={places} />
       <WatchlistManager
         swimmers={swimmers.map((s) => ({
           id: s.id,

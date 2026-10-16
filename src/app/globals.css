@@ -12,20 +12,55 @@
   --color-pool-800: #0e506b;
   --color-pool-900: #11435b;
   --color-pool-950: #082a3c;
+  --color-deep: #05273a;
   --color-medal: #f5a623;
   --color-coral: #ff6b5e;
+
+  /* lane-rope accents */
+  --color-rope-red: #e8504a;
+  --color-rope-sun: #ffc23d;
+  --color-rope-blue: #1f6fe5;
+
+  /* strokes */
+  --color-stroke-p: #0f9d74;
+  --color-stroke-z: #2f7fe0;
+  --color-stroke-k: #0a6182;
+  --color-stroke-m: #e8504a;
+  --color-stroke-o: #c98a06;
+
+  /* medals */
+  --color-gold: #f2b01e;
+  --color-silver: #9fb0bb;
+  --color-bronze: #c7783a;
+
   --font-display: var(--font-bricolage);
-  --font-body: var(--font-inter);
+  --font-body: var(--font-lexend);
+
+  --animate-rise: rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 body {
   font-family: var(--font-body), system-ui, sans-serif;
-  background: var(--color-pool-50);
+  background:
+    radial-gradient(120% 60% at 50% -10%, #dff5fb 0%, transparent 60%),
+    linear-gradient(180deg, #f2fbfd 0%, #eaf6f9 100%);
+  background-attachment: fixed;
   color: var(--color-pool-950);
 }
 
 h1, h2, h3, .display {
   font-family: var(--font-display), var(--font-body), sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes float {
@@ -34,6 +69,41 @@ h1, h2, h3, .display {
 }
 .float { animation: float 3.5s ease-in-out infinite; }
 
+/* light dancing on the pool floor */
+@keyframes caustic-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(8%, 6%) scale(1.15); }
+}
+@keyframes caustic-b {
+  0%, 100% { transform: translate(0, 0) scale(1.1); }
+  50% { transform: translate(-10%, -4%) scale(0.95); }
+}
+.caustic-a { animation: caustic-a 11s ease-in-out infinite; }
+.caustic-b { animation: caustic-b 14s ease-in-out infinite; }
+
+@keyframes lane-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.lane-glow { animation: lane-glow 2.2s ease-in-out infinite; }
+
+@keyframes buoy-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(14 151 191 / 0.45); }
+  100% { box-shadow: 0 0 0 10px rgb(14 151 191 / 0); }
+}
+.buoy-pulse { animation: buoy-pulse 1.8s ease-out infinite; }
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+.pb-shimmer {
+  background: linear-gradient(100deg, #f2b01e 20%, #ffe08a 40%, #f2b01e 60%);
+  background-size: 200% 100%;
+  animation: shimmer 3.2s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .float { animation: none; }
+  .float, .caustic-a, .caustic-b, .lane-glow, .buoy-pulse, .pb-shimmer { animation: none; }
+  .animate-rise { animation: none; }
 }

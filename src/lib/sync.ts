@@ -2,7 +2,9 @@ import { db, Swimmer } from "./db";
 import * as csps from "./csps";
 import { scrapeOpenWaterResults, distanceKey } from "./openwater_scrape";
 import { fmtTime, fmtDelta, disciplineLabel } from "./format";
+import { addDays, pragueToday } from "./time";
 import { sendTelegram } from "./telegram";
+import { scanEntries } from "./sync_entries";
 
 const RANKING_DISCIPLINES = ["50 P", "100 P", "50 K", "50 Z", "100 Z"];
 
@@ -18,7 +20,7 @@ interface NewResultEvent {
   isDsq: boolean;
 }
 
-export async function runSync(): Promise<{ newResults: number; swimmers: number; notes: string[] }> {
+export async function runSync(opts: { backfillFrom?: string } = {}): Promise<{ newResults: number; swimmers: number; notes: string[] }> {
   const notes: string[] = [];
   const { data: swimmers, error } = await db().from("swim_swimmers").select("*").eq("active", true);
   if (error) throw error;
@@ -43,18 +45,7 @@ export async function runSync(): Promise<{ newResults: number; swimmers: number;
     }
   }
 
-  // notifications (skip per-swimmer initial backfill)
-  for (const ev of events.filter((e) => !e.isDsq)) {
-    const who = ev.swimmer.is_primary ? "🏊‍♀️ <b>Viki</b>" : `${ev.swimmer.first_name} ${ev.swimmer.last_name}`;
-    const pb = ev.isPB
-      ? ev.prevPbMs
-        ? ` 🎉 <b>OSOBÁK</b> (${fmtDelta(ev.timeMs - ev.prevPbMs)})`
-        : " — první start v disciplíně"
-      : ev.prevPbMs
-        ? ` (${fmtDelta(ev.timeMs - ev.prevPbMs)} od osobáku)`
-        : "";
-    await sendTelegram(`${who}: ${disciplineLabel(ev.discipline)} ${fmtTime(ev.timeMs)} (${ev.pool}m) · ${ev.location}${pb}`);
-  }
+  await notifyResults(events);
 
   const primary = (swimmers ?? []).find((s: Swimmer) => s.is_primary) as Swimmer | undefined;
   if (primary?.birth_year) {
@@ -67,9 +58,10 @@ export async function runSync(): Promise<{ newResults: number; swimmers: number;
   }
 
   try {
-    await scanUpcoming();
+    const en = await scanEntries({ backfillFrom: opts.backfillFrom });
+    notes.push(...en.notes);
   } catch (e) {
-    notes.push(`upcoming: ${(e as Error).message}`);
+    notes.push(`entries: ${(e as Error).message}`);
   }
 
   try {
@@ -88,6 +80,64 @@ export async function runSync(): Promise<{ newResults: number; swimmers: number;
 
   await db().from("swim_settings").upsert({ key: "last_sync", value: { at: new Date().toISOString(), newResults: inserted }, updated_at: new Date().toISOString() });
   return { newResults: inserted, swimmers: swimmers?.length ?? 0, notes };
+}
+
+async function notifyResults(events: NewResultEvent[]): Promise<void> {
+  // notifications (skip per-swimmer initial backfill)
+  for (const ev of events.filter((e) => !e.isDsq)) {
+    const who = ev.swimmer.is_primary ? "🏊‍♀️ <b>Viki</b>" : `${ev.swimmer.first_name} ${ev.swimmer.last_name}`;
+    const pb = ev.isPB
+      ? ev.prevPbMs
+        ? ` 🎉 <b>OSOBÁK</b> (${fmtDelta(ev.timeMs - ev.prevPbMs)})`
+        : " — první start v disciplíně"
+      : ev.prevPbMs
+        ? ` (${fmtDelta(ev.timeMs - ev.prevPbMs)} od osobáku)`
+        : "";
+    await sendTelegram(`${who}: ${disciplineLabel(ev.discipline)} ${fmtTime(ev.timeMs)} (${ev.pool}m) · ${ev.location}${pb}`);
+  }
+
+}
+
+// Race-day polling: refresh results + entries only for swimmers racing around today.
+// Exits after one DB query when nobody races, so it is cheap to call every 15 minutes.
+export async function runLiveSync(): Promise<{ skipped: boolean; newResults: number; notes: string[] }> {
+  const today = pragueToday();
+  const { data: racing } = await db()
+    .from("swim_entries")
+    .select("swimmer_id")
+    .gte("swim_date", addDays(today, -1))
+    .lte("swim_date", addDays(today, 1));
+  const ids = [...new Set((racing ?? []).map((r) => r.swimmer_id as string))];
+  if (!ids.length) return { skipped: true, newResults: 0, notes: [] };
+  const notes: string[] = [];
+  const { data: swimmers } = await db().from("swim_swimmers").select("*").in("id", ids).eq("active", true);
+  let titleMap: Map<number, { title: string; location: string }> | null = null;
+  try {
+    titleMap = await csps.getCompetitionTitleMap(Number(today.slice(0, 4)));
+  } catch {
+    notes.push("competitions list unavailable");
+  }
+  const events: NewResultEvent[] = [];
+  let inserted = 0;
+  for (const s of (swimmers ?? []) as Swimmer[]) {
+    try {
+      const r = await syncSwimmer(s, titleMap);
+      events.push(...r.events);
+      inserted += r.inserted;
+    } catch (e) {
+      notes.push(`sync ${s.last_name}: ${(e as Error).message}`);
+    }
+  }
+  await notifyResults(events);
+  const primary = ((swimmers ?? []) as Swimmer[]).find((s) => s.is_primary);
+  if (primary && inserted) await computeBadges(primary);
+  try {
+    const en = await scanEntries({ live: true });
+    notes.push(...en.notes);
+  } catch (e) {
+    notes.push(`entries: ${(e as Error).message}`);
+  }
+  return { skipped: false, newResults: inserted, notes };
 }
 
 async function syncSwimmer(s: Swimmer, titleMap: Map<number, { title: string; location: string }> | null): Promise<{ events: NewResultEvent[]; inserted: number }> {
@@ -239,111 +289,6 @@ async function computeBadges(primary: Swimmer): Promise<void> {
   void RACE_MILESTONES;
 }
 
-// ---- Upcoming starts detection -------------------------------------------
-// Scans future competitions (next 21 days), matches applications by userId,
-// refines accepted/reserve from the OMEGA start list when published.
-
-export interface EntryInfo {
-  disc: string;
-  status: "accepted" | "reserve" | "entered";
-  seed: number | null;
-}
-
-export async function scanUpcoming(): Promise<{ notified: number }> {
-  const { data: swimmers } = await db().from("swim_swimmers").select("*").eq("active", true);
-  const byUserId = new Map((swimmers ?? []).map((s: Swimmer) => [s.csps_user_id, s]));
-  if (byUserId.size === 0) return { notified: 0 };
-
-  const today = new Date().toISOString().slice(0, 10);
-  const horizon = new Date(Date.now() + 21 * 86400_000).toISOString().slice(0, 10);
-  const year = new Date().getFullYear();
-  let comps = (await csps.getCompetitions(year)).filter(
-    (c) => c.sport === 1 && !c.masters && c.startDate?.slice(0, 10) >= today && c.startDate?.slice(0, 10) <= horizon
-  );
-  // year boundary: include early next-year races when horizon crosses Jan 1
-  if (horizon.slice(0, 4) !== String(year)) {
-    const next = (await csps.getCompetitions(year + 1)).filter(
-      (c) => c.sport === 1 && !c.masters && c.startDate?.slice(0, 10) >= today && c.startDate?.slice(0, 10) <= horizon
-    );
-    comps = comps.concat(next);
-  }
-
-  let notified = 0;
-  for (const comp of comps) {
-    let entries: Map<number, EntryInfo[]>;
-    try {
-      const apps = await csps.getApplicationEntries(comp.competitionId);
-      entries = new Map();
-      for (const a of apps) {
-        if (!byUserId.has(a.userId)) continue;
-        if (!entries.has(a.userId)) entries.set(a.userId, []);
-        entries.get(a.userId)!.push({ disc: a.disciplineCode, status: a.overLimit ? "reserve" : "entered", seed: a.qualificationTime });
-      }
-    } catch {
-      continue; // applications not public for this competition
-    }
-    if (entries.size === 0) continue;
-
-    // refine with start list when available (matched by name+birth year)
-    let hasStartlist = false;
-    try {
-      const sl = await csps.getStartList(comp.competitionId);
-      if (sl && sl.length > 0) {
-        hasStartlist = true;
-        for (const [uid, list] of entries) {
-          const s = byUserId.get(uid)!;
-          for (const e of list) {
-            const row = sl.find(
-              (r) =>
-                r.discipline.replace(" ", "") === e.disc.replace(" ", "") &&
-                r.lastName.localeCompare(s.last_name, "cs", { sensitivity: "base" }) === 0 &&
-                r.birthYear === String(s.birth_year ?? "")
-            );
-            if (row) e.status = row.heat > 0 ? "accepted" : "reserve";
-          }
-        }
-      }
-    } catch {
-      // start list parsing is best-effort
-    }
-
-    const entriesJson: Record<string, EntryInfo[]> = {};
-    for (const [uid, list] of entries) entriesJson[String(uid)] = list;
-
-    const { data: existing } = await db().from("swim_competitions").select("entries").eq("csps_id", comp.competitionId).maybeSingle();
-    const isNew = !existing || !existing.entries;
-
-    await db().from("swim_competitions").upsert(
-      {
-        csps_id: comp.competitionId,
-        title: comp.title,
-        location: comp.location,
-        pool_length: comp.poolLength,
-        start_date: comp.startDate?.slice(0, 10),
-        end_date: comp.endDate?.slice(0, 10),
-        entries: entriesJson,
-        has_startlist: hasStartlist,
-        last_checked_at: new Date().toISOString(),
-      },
-      { onConflict: "csps_id" }
-    );
-
-    if (isNew) {
-      const lines: string[] = [];
-      for (const [uid, list] of entries) {
-        const s = byUserId.get(uid)!;
-        const who = s.is_primary ? "🏊‍♀️ <b>Viki</b>" : `${s.first_name} ${s.last_name}`;
-        const discs = list.map((e) => `${disciplineLabel(e.disc)}${e.status === "reserve" ? " (pod čarou)" : ""}`).join(", ");
-        lines.push(`${who}: ${discs}`);
-      }
-      const d = comp.startDate?.slice(0, 10).split("-").reverse().join(". ").replace(/^0/, "");
-      await sendTelegram(`📋 <b>Na startovce</b> — ${comp.title}, ${d} ${comp.location}\n${lines.join("\n")}`);
-      notified += 1;
-    }
-  }
-  return { notified };
-}
-
 // ---- Open water (dálkové plavání) ----------------------------------------
 // For each tracked swimmer, find their open-water races via applications (userId match),
 // then resolve time + placing from the category outputs once results exist.
@@ -354,7 +299,6 @@ export async function scanOpenWater(): Promise<{ newResults: number; notes: stri
   const byUserId = new Map((swimmers ?? []).map((s: Swimmer) => [s.csps_user_id, s]));
   if (byUserId.size === 0) return { newResults: 0, notes };
 
-  const today = new Date().toISOString().slice(0, 10);
   const from = new Date(Date.now() - 45 * 86400_000).toISOString().slice(0, 10);
   const to = new Date(Date.now() + 21 * 86400_000).toISOString().slice(0, 10);
   const year = new Date().getFullYear();
@@ -369,7 +313,7 @@ export async function scanOpenWater(): Promise<{ newResults: number; notes: stri
     return { newResults: 0, notes };
   }
 
-  let newResults = 0;
+  const newResults = 0;
   for (const comp of comps) {
     let entries: csps.OwApplication[];
     try {

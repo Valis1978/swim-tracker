@@ -1,220 +1,311 @@
+import Link from "next/link";
 import Nav from "@/components/Nav";
 import Confetti from "@/components/Confetti";
-import Sparkline from "@/components/Sparkline";
-import { getPrimary, getResults, getBadges, getUpcomingCompetitions, personalBests } from "@/lib/queries";
+import { ChevronGlyph, MedalGlyph, SparkGlyph, StrokeGlyph } from "@/components/Glyphs";
+import { SectionTitle, StatusChip, ToneDot, WaterHero } from "@/components/Pool";
+import { MeetCard } from "@/components/Race";
 import { requireRole } from "@/lib/auth";
-import { fmtTime, fmtDate, disciplineLabel } from "@/lib/format";
+import { changeText, type Tone } from "@/lib/entries";
+import { fmtTime } from "@/lib/format";
+import { eventName, placeView, toneOf } from "@/lib/present";
+import { getBadges, getCompetitionsByIds, getPrimary, getResults, getSwimmerEntries, kidSeesPlaces, type EntryRow } from "@/lib/queries";
+import { computeRecords, pbFlags } from "@/lib/records";
+import { STROKE_META, strokeOf } from "@/lib/strokes";
+import { addDays, daysBetween, pragueToday, relativeDay, shortDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
+
+const NICK = "Viki";
 
 export default async function VikiPage({ searchParams }: { searchParams: Promise<{ slavime?: string }> }) {
   const { slavime } = await searchParams;
   const role = await requireRole();
+  const parent = role === "parent";
   const primary = await getPrimary();
   if (!primary) {
     return (
-      <main className="min-h-dvh flex items-center justify-center p-8 text-center text-pool-900/60">
+      <main className="flex min-h-dvh items-center justify-center p-8 text-center text-pool-900/60">
         Zatím tu nikdo neplave — přidej plavce v Nastavení a spusť synchronizaci.
         <Nav role={role} />
       </main>
     );
   }
-  const [results, badges, upcoming] = await Promise.all([
-    getResults(primary.id),
-    getBadges(primary.id),
-    getUpcomingCompetitions(),
-  ]);
-  const finals = results.filter((r) => !r.is_split && !r.is_dsq);
-  const pbs = personalBests(results, 25);
-  const pbs50 = personalBests(results, 50);
-  const raceDays = [...new Set(finals.map((r) => r.swim_date))].sort();
-  const lastRaceDay = raceDays[raceDays.length - 1];
-  const lastRace = finals.filter((r) => r.swim_date === lastRaceDay);
-  const nextComp = upcoming.find((u) => u.entries && u.entries[String(primary.csps_user_id)]) ?? null;
-  const nextEntries = nextComp?.entries?.[String(primary.csps_user_id)] ?? [];
+  const today = pragueToday();
+  const [results, badges, entries, kidPlaces] = await Promise.all([getResults(primary.id), getBadges(primary.id), getSwimmerEntries(primary.id), kidSeesPlaces()]);
 
-  // "Moje cesta": first race result -> personal best per discipline (same pool as the PB)
-  const journey: { disc: string; firstMs: number; bestMs: number; gain: number }[] = [];
-  for (const [disc, best] of pbs) {
-    const sameDisc = finals
-      .filter((r) => r.discipline === disc && r.pool_length === best.pool_length)
-      .sort((x, y) => x.swim_date.localeCompare(y.swim_date));
-    if (sameDisc.length < 2) continue;
-    const first = sameDisc[0];
-    const gain = (first.time_ms - best.time_ms) / 1000;
-    if (gain > 0.005) journey.push({ disc, firstMs: first.time_ms, bestMs: best.time_ms, gain });
+  // ---- meets
+  const byMeet = new Map<number, EntryRow[]>();
+  for (const e of entries) {
+    if (!byMeet.has(e.competition_csps_id)) byMeet.set(e.competition_csps_id, []);
+    byMeet.get(e.competition_csps_id)!.push(e);
   }
-  journey.sort((x, y) => y.gain - x.gain);
+  const comps = await getCompetitionsByIds([...byMeet.keys()]);
+  const meets = [...byMeet.entries()]
+    .map(([id, list]) => ({ id, comp: comps.get(id)!, list: list.sort((a, b) => a.event_no - b.event_no) }))
+    .filter((m) => m.comp);
+  const upcoming = meets.filter((m) => (m.comp.end_date ?? m.comp.start_date) >= today).sort((a, b) => a.comp.start_date.localeCompare(b.comp.start_date));
+  const next = upcoming[0] ?? null;
+  const lastMeet = meets
+    .filter((m) => m.comp.start_date <= today && m.list.some((e) => e.status === "swum" || e.status === "dsq"))
+    .sort((a, b) => b.comp.start_date.localeCompare(a.comp.start_date))[0];
 
-  // fresh personal bests: newest race day results that equal the PB, within 3 days
-  const freshPBs: { disc: string; timeMs: number; improvedBy: number | null }[] = [];
-  if (lastRaceDay) {
-    const ageDays = (Date.now() - +new Date(lastRaceDay)) / 86400_000;
-    if (ageDays <= 3 || slavime) {
-      for (const r of lastRace) {
-        const best = pbs.get(r.discipline) ?? pbs50.get(r.discipline);
-        if (!best || best.swim_date !== r.swim_date || best.time_ms !== r.time_ms) continue;
-        const prev = finals
-          .filter((x) => x.discipline === r.discipline && x.pool_length === r.pool_length && x.swim_date < r.swim_date)
-          .reduce((m, x) => Math.min(m, x.time_ms), Infinity);
-        if (prev === Infinity) continue; // first-ever swim, not a beaten PB
-        freshPBs.push({ disc: r.discipline, timeMs: r.time_ms, improvedBy: (prev - r.time_ms) / 1000 });
+  // ---- what's new: entry changes of the last three weeks, bursts collapsed per meet
+  const cutoff = addDays(today, -21);
+  type News = { at: string; text: string; tone: Tone; href: string };
+  const news: News[] = [];
+  for (const m of meets) {
+    const bursts = new Map<string, { status: string; items: EntryRow[] }>();
+    for (const e of m.list) {
+      for (const h of e.history) {
+        if (h.at.slice(0, 10) < cutoff || !h.from) continue;
+        const k = `${h.at.slice(0, 16)}|${h.to.status}`;
+        if (!bursts.has(k)) bursts.set(k, { status: h.to.status, items: [] });
+        bursts.get(k)!.items.push({ ...e, ...h.to, history: [h] });
+      }
+    }
+    for (const [k, b] of bursts) {
+      const at = k.slice(0, 16);
+      const href = `/zavod/${m.id}`;
+      if (b.items.length > 1 && (b.status === "accepted" || b.status === "drawn")) {
+        const all = b.items.length === m.list.length;
+        news.push({
+          at,
+          tone: b.status === "accepted" ? "ok" : "drawn",
+          text:
+            b.status === "accepted"
+              ? `${m.comp.title}: po odhláškách ${all ? `potvrzeno všech ${b.items.length} tratí` : `potvrzeno ${b.items.length} tratí`}`
+              : `${m.comp.title}: rozlosováno — mrkni na rozplavby a dráhy`,
+          href,
+        });
+        continue;
+      }
+      for (const e of b.items) {
+        const h = e.history[0];
+        const t = changeText(eventName(e.discipline), h.from, h.to, fmtTime);
+        if (t) news.push({ at, tone: toneOf(e), text: `${m.comp.title} · ${t}`, href });
       }
     }
   }
-  const demo = Boolean(slavime) && freshPBs.length === 0;
-  if (demo) {
-    const top = [...pbs.entries()][0];
-    if (top) freshPBs.push({ disc: top[0], timeMs: top[1].time_ms, improvedBy: 0.55 });
-  }
-  const celebrate = freshPBs.length > 0;
+  news.sort((a, b) => b.at.localeCompare(a.at));
 
-  // per-discipline 25m series for sparklines
-  const series = new Map<string, number[]>();
-  for (const r of finals.filter((x) => x.pool_length === 25).sort((a, b) => a.swim_date.localeCompare(b.swim_date))) {
-    if (!series.has(r.discipline)) series.set(r.discipline, []);
-    series.get(r.discipline)!.push(r.time_ms);
+  // ---- personal bests
+  const flags = pbFlags(results);
+  const finals = results.filter((r) => !r.is_split && !r.is_dsq && r.time_ms < 6_000_000);
+  const raceDays = [...new Set(finals.map((r) => r.swim_date))].sort();
+  const lastRaceDay = raceDays[raceDays.length - 1];
+  const freshPBs: { disc: string; pool: number; timeMs: number; improvedBy: number }[] = [];
+  if (lastRaceDay && (daysBetween(lastRaceDay, today) <= 3 || slavime)) {
+    for (const r of finals.filter((x) => x.swim_date === lastRaceDay)) {
+      if (flags.get(r.id) !== "pb") continue;
+      const prev = results
+        .filter((x) => x.discipline === r.discipline && x.pool_length === r.pool_length && !x.is_dsq && x.time_ms < 6_000_000 && x.swim_date < r.swim_date)
+        .reduce((m, x) => Math.min(m, x.time_ms), Infinity);
+      freshPBs.push({ disc: r.discipline, pool: r.pool_length, timeMs: r.time_ms, improvedBy: (prev - r.time_ms) / 1000 });
+    }
   }
+  const records = [...computeRecords(results, 25), ...computeRecords(results, 50)];
+  const demo = Boolean(slavime) && freshPBs.length === 0;
+  if (demo && records[0]) freshPBs.push({ disc: records[0].discipline, pool: records[0].best.pool_length, timeMs: records[0].best.time_ms, improvedBy: 0.55 });
+  const celebrate = freshPBs.length > 0;
+  const topRecords = [...records].sort((a, b) => (b.best.points ?? 0) - (a.best.points ?? 0)).slice(0, 4);
+
+  // "Moje cesta": first race -> record (25 m), always positive
+  const journey = computeRecords(results, 25)
+    .filter((r) => r.gainMs != null && r.gainMs > 5)
+    .sort((a, b) => (b.gainMs ?? 0) - (a.gainMs ?? 0))
+    .slice(0, 5);
+
+  const club = primary.club_abbrev === "OSPHo" ? "OSP Hodonín" : (primary.club_abbrev ?? primary.club_name ?? "");
+  const raceCount = new Set(results.filter((r) => !r.is_split).map((r) => `${r.swim_date}|${r.competition_csps_id}`)).size;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pb-32 pt-4">
       {celebrate && <Confetti />}
+
+      <WaterHero>
+        <div className="px-5 pt-5 pb-4">
+          <p className="text-sm font-semibold text-pool-200">
+            {club}
+            {raceCount ? ` · ${raceCount} ${raceCount === 1 ? "závod" : raceCount < 5 ? "závody" : "závodů"}` : ""}
+          </p>
+          <h1 className="mt-1 text-[2.6rem] font-extrabold leading-none">Ahoj, {NICK}!</h1>
+          {next ? (
+            <Link href={`/zavod/${next.id}`} className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/12 px-4 py-3 ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/20">
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold uppercase tracking-wide text-pool-200">
+                  {relativeDay(next.comp.start_date, today) === "dnes" ? "dnes závodíš" : `příští závod ${relativeDay(next.comp.start_date, today)}`}
+                </span>
+                <span className="block truncate text-lg font-bold">{next.comp.title}</span>
+              </span>
+              <ChevronGlyph size={22} className="shrink-0 text-pool-200" />
+            </Link>
+          ) : (
+            <p className="mt-3 text-pool-100/80">Žádný závod v kalendáři. Užij si trénink!</p>
+          )}
+        </div>
+      </WaterHero>
+
       {celebrate && (
-        <section className="rounded-3xl bg-gradient-to-br from-medal to-coral text-white p-5 shadow-lg">
-          <p className="text-xs font-bold uppercase tracking-widest text-white/80">{demo ? "ukázka oslavy" : "to je ono!"}</p>
-          <h2 className="text-2xl font-bold mt-1">🎉 NOVÝ OSOBÁK!</h2>
+        <section className="animate-rise relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#ffcf4a] via-gold to-[#f08a24] p-5 text-[#3d2600] shadow-[0_14px_30px_-14px_rgb(240_138_36/0.8)]">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#3d2600]/70">{demo ? "ukázka oslavy" : "to je ono!"}</p>
+          <h2 className="mt-1 flex items-center gap-2 text-2xl font-extrabold">
+            <SparkGlyph size={24} /> Nový osobák!
+          </h2>
           {freshPBs.map((p) => (
-            <p key={p.disc} className="mt-1 text-white/95 font-semibold">
-              {disciplineLabel(p.disc)} — {fmtTime(p.timeMs)}
-              {p.improvedBy != null && p.improvedBy > 0 && (
-                <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-sm">o {p.improvedBy.toFixed(2).replace(".", ",")} s rychleji!</span>
+            <p key={`${p.disc}-${p.pool}`} className="mt-1.5 font-semibold">
+              {eventName(p.disc)}
+              {p.pool === 50 ? " (50 m bazén)" : ""} — <span className="nums">{fmtTime(p.timeMs)}</span>
+              {p.improvedBy > 0 && (
+                <span className="ml-2 rounded-full bg-white/40 px-2 py-0.5 text-sm">o {p.improvedBy.toFixed(2).replace(".", ",")} s rychleji</span>
               )}
             </p>
           ))}
         </section>
       )}
-      <header className="rounded-3xl bg-gradient-to-br from-pool-500 to-pool-700 text-white p-6 relative overflow-hidden">
-        <div className="absolute -right-4 -top-4 text-8xl opacity-20 float">🌊</div>
-        <p className="text-pool-100 text-sm font-medium">ahoj, tady plave</p>
-        <h1 className="text-4xl font-bold mt-1">{primary.first_name} 🏊‍♀️</h1>
-        <p className="mt-2 text-pool-100 text-sm">
-          {primary.club_abbrev === "OSPHo" ? "OSP Hodonín" : (primary.club_abbrev ?? primary.club_name ?? "")} · {raceDays.length}{" "}
-          {raceDays.length === 1 ? "závod" : raceDays.length < 5 ? "závody" : "závodů"}
-        </p>
-      </header>
 
-      {nextComp && (
-        <section className="rounded-3xl bg-medal/15 border-2 border-medal/40 p-5 flex items-center gap-4">
-          <div className="text-4xl">🏁</div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-pool-800/60">příští závod</p>
-            <p className="font-bold text-pool-900">{nextComp.title}</p>
-            <p className="text-sm text-pool-900/70">
-              {fmtDate(nextComp.start_date)} · {nextComp.location}
-            </p>
-            {nextEntries.length > 0 && (
-              <p className="text-xs text-pool-900/60 mt-1">
-                poplave: {nextEntries.filter((e) => e.status !== "reserve").map((e) => disciplineLabel(e.disc)).join(", ") || "—"}
-              </p>
-            )}
+      {next && (
+        <section>
+          <SectionTitle>Příští závod</SectionTitle>
+          <MeetCard comp={next.comp} entries={next.list} href={`/zavod/${next.id}`} today={today} />
+        </section>
+      )}
+
+      {news.length > 0 && (
+        <section>
+          <SectionTitle>Co je nového</SectionTitle>
+          <ul className="flex flex-col divide-y divide-pool-50 overflow-hidden rounded-3xl border border-pool-100 bg-white">
+            {news.slice(0, 5).map((n, i) => (
+              <li key={i}>
+                <Link href={n.href} className="flex items-start gap-3 px-4 py-3 hover:bg-pool-50">
+                  <ToneDot tone={n.tone} className="mt-1.5" />
+                  <span className="min-w-0 flex-1 text-sm text-pool-900/80">{n.text}</span>
+                  <span className="shrink-0 text-xs text-pool-900/40">{shortDate(n.at)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {topRecords.length > 0 && (
+        <section>
+          <SectionTitle
+            action={
+              <Link href="/rekordy" className="text-sm font-semibold text-pool-600 hover:text-pool-800">
+                Všechny rekordy →
+              </Link>
+            }
+          >
+            Moje rekordy
+          </SectionTitle>
+          <div className="grid grid-cols-2 gap-3">
+            {topRecords.map((r, i) => (
+              <Link
+                key={`${r.discipline}-${r.best.pool_length}`}
+                href={`/rekordy?bazen=${r.best.pool_length}`}
+                className="animate-rise relative overflow-hidden rounded-3xl border border-pool-100 bg-white p-4 hover:-translate-y-0.5 transition"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <span className="absolute inset-x-0 top-0 h-1" style={{ background: STROKE_META[r.stroke].color }} aria-hidden="true" />
+                <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color: STROKE_META[r.stroke].color }}>
+                  <StrokeGlyph stroke={r.stroke} size={18} />
+                  {eventName(r.discipline)}
+                </div>
+                <p className="display nums mt-1.5 text-[1.7rem] font-extrabold leading-none text-pool-900">{fmtTime(r.best.time_ms)}</p>
+                <p className="mt-1 text-[11px] text-pool-900/45">
+                  {r.best.pool_length} m bazén{r.best.points != null ? ` · ${r.best.points} b.` : ""}
+                </p>
+              </Link>
+            ))}
           </div>
         </section>
       )}
 
-      <section>
-        <h2 className="text-xl font-bold text-pool-800 mb-3">Moje nejlepší časy</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[...pbs.entries()].map(([disc, r]) => (
-            <div key={disc} className="rounded-2xl bg-white p-4 shadow-sm border border-pool-100 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(disc)}</p>
-                <p className="text-3xl font-bold text-pool-900 mt-0.5">
-                  {fmtTime(r.time_ms)}
-                  {r.points != null && <span className="ml-2 text-sm font-semibold text-pool-400">{r.points} b.</span>}
-                </p>
-                <p className="text-xs text-pool-900/50 mt-0.5">{fmtDate(r.swim_date)} · {r.location}</p>
-              </div>
-              {(series.get(disc)?.length ?? 0) >= 2 && <Sparkline values={series.get(disc)!} />}
-            </div>
-          ))}
-          {pbs.size === 0 && <p className="text-pool-900/50 text-sm">Zatím žádné časy — po prvním závodě se tu objeví.</p>}
-        </div>
-      </section>
-
-      {pbs50.size > 0 && (
+      {lastMeet && (
         <section>
-          <h2 className="text-xl font-bold text-pool-800 mb-3">Dlouhý bazén (50m)</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[...pbs50.entries()].map(([disc, r]) => (
-              <div key={disc} className="rounded-2xl bg-white p-4 shadow-sm border border-pool-100">
-                <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(disc)}</p>
-                <p className="text-2xl font-bold text-pool-900 mt-0.5">
-                  {fmtTime(r.time_ms)}
-                  {r.points != null && <span className="ml-2 text-sm font-semibold text-pool-400">{r.points} b.</span>}
-                </p>
-                <p className="text-xs text-pool-900/50 mt-0.5">{fmtDate(r.swim_date)} · {r.location}</p>
+          <SectionTitle>Poslední závod</SectionTitle>
+          <Link href={`/zavod/${lastMeet.id}`} className="block overflow-hidden rounded-3xl border border-pool-100 bg-white hover:bg-pool-50/40">
+            <div className="flex items-start justify-between gap-3 px-4 pt-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-pool-600">{shortDate(lastMeet.comp.start_date, true)}</p>
+                <h3 className="text-lg font-extrabold leading-tight text-pool-900">{lastMeet.comp.title}</h3>
               </div>
-            ))}
-          </div>
+              <ChevronGlyph size={20} className="mt-1 shrink-0 text-pool-300" />
+            </div>
+            <div className="mt-2 divide-y divide-pool-50 px-4 pb-2">
+              {lastMeet.list
+                .filter((e) => e.status === "swum" || e.status === "dsq")
+                .map((e) => {
+                  const r = results.find((x) => x.competition_csps_id === lastMeet.id && x.discipline === e.discipline && !x.is_split && x.time_ms === e.result_ms);
+                  const pl = placeView(e, primary.birth_year, { parent, kidPlaces });
+                  return (
+                    <div key={e.id} className="flex items-center justify-between gap-3 py-2">
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-pool-900/80">
+                        <StrokeGlyph stroke={strokeOf(e.discipline)} size={20} />
+                        {eventName(e.discipline)}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {pl?.medal && <MedalGlyph place={pl.medal} size={20} />}
+                        {pl && (
+                          <span className="text-xs text-pool-900/50">
+                            {pl.main.replace(/ v ročníku.*/, "")} {pl.of}
+                          </span>
+                        )}
+                        {r && flags.get(r.id) === "pb" && <SparkGlyph size={15} className="text-gold" />}
+                        {e.status === "swum" && e.result_ms != null ? (
+                          <span className="nums font-bold text-pool-900">{fmtTime(e.result_ms)}</span>
+                        ) : (
+                          <StatusChip tone="dsq">DSQ</StatusChip>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </Link>
         </section>
       )}
 
       {journey.length > 0 && (
         <section>
-          <h2 className="text-xl font-bold text-pool-800 mb-3">Moje cesta 🛤️</h2>
+          <SectionTitle>Moje cesta</SectionTitle>
           <div className="flex flex-col gap-2">
             {journey.map((j) => (
-              <div key={j.disc} className="rounded-2xl bg-white border border-pool-100 shadow-sm px-4 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-pool-500">{disciplineLabel(j.disc)}</p>
-                  <p className="text-sm text-pool-900/70 mt-0.5">
-                    {fmtTime(j.firstMs)} <span className="text-pool-400">→</span> <b className="text-pool-900">{fmtTime(j.bestMs)}</b>
-                  </p>
+              <div key={j.discipline} className="flex items-center justify-between gap-3 rounded-3xl border border-pool-100 bg-white px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <StrokeGlyph stroke={j.stroke} size={24} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-pool-900">{eventName(j.discipline)}</p>
+                    <p className="nums text-xs text-pool-900/55">
+                      {fmtTime(j.firstMs)} <span className="text-pool-300">→</span> <b className="text-pool-900">{fmtTime(j.best.time_ms)}</b>
+                    </p>
+                  </div>
                 </div>
-                <span className="shrink-0 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-bold px-3 py-1.5">
-                  −{j.gain.toFixed(1).replace(".", ",")} s {j.gain >= 5 ? "🚀" : j.gain >= 2 ? "⚡" : "💪"}
+                <span className="nums shrink-0 rounded-full bg-[#e3f8ef] px-3 py-1.5 text-sm font-bold text-[#07704b] ring-1 ring-[#99dfbf]">
+                  −{((j.gainMs ?? 0) / 1000).toFixed(1).replace(".", ",")} s
                 </span>
               </div>
             ))}
           </div>
-          <p className="text-xs text-pool-900/40 mt-2">Od tvého úplně prvního startu k osobáku.</p>
+          <p className="mt-2 text-xs text-pool-900/45">Od tvého úplně prvního startu k rekordu (krátký bazén).</p>
         </section>
       )}
 
       {badges.length > 0 && (
         <section>
-          <h2 className="text-xl font-bold text-pool-800 mb-3">Odznaky</h2>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-            {badges.map((b) => (
-              <div key={b.badge_key} className="rounded-2xl bg-white border border-pool-100 shadow-sm p-3 flex flex-col items-center text-center gap-1">
-                <span className="text-3xl">{b.emoji}</span>
-                <span className="text-[11px] font-semibold text-pool-900/70 leading-tight">{b.label}</span>
+          <SectionTitle>Odznaky</SectionTitle>
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {badges.map((b, i) => (
+              <div key={b.badge_key} className="animate-rise flex flex-col items-center gap-1.5 rounded-3xl border border-pool-100 bg-white p-3 text-center" style={{ animationDelay: `${i * 40}ms` }}>
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-pool-50 to-pool-100 text-2xl ring-2 ring-white shadow-inner">{b.emoji}</span>
+                <span className="text-[11px] font-semibold leading-tight text-pool-900/70">{b.label}</span>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {lastRace.length > 0 && (
-        <section>
-          <h2 className="text-xl font-bold text-pool-800 mb-3">Poslední závod</h2>
-          <div className="rounded-2xl bg-white border border-pool-100 shadow-sm divide-y divide-pool-50">
-            <p className="px-4 pt-3 pb-1 text-sm font-semibold text-pool-900/60">
-              {lastRace[0].competition_title ?? lastRace[0].location} · {fmtDate(lastRaceDay)}
-            </p>
-            {lastRace.map((r) => (
-              <div key={r.id} className="px-4 py-2.5 flex items-center justify-between">
-                <span className="text-sm font-medium text-pool-900/80">{disciplineLabel(r.discipline)}</span>
-                <span className="font-bold text-pool-900">{fmtTime(r.time_ms)}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <p className="text-center text-xs text-pool-900/40 pb-2">
-        Každý start se počítá. Plav si svoje. 💙
-      </p>
+      <p className="pb-2 text-center text-xs text-pool-900/40">Každý start se počítá. Plav si svoje.</p>
       <Nav role={role} />
     </main>
   );

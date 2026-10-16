@@ -29,13 +29,13 @@ try {
   }
   assert.ok(ready, 'App failed to start: ' + output.slice(-2000));
 
-  for (const path of ['/viki', '/zavody', '/dalkove', '/prehled', '/nastaveni', '/plavec/synthetic']) {
+  for (const path of ['/viki', '/zavody', '/dalkove', '/rekordy', '/zavod/1', '/prehled', '/nastaveni', '/plavec/synthetic']) {
     const res = await request(path);
     assert.equal(res.status, 307, path);
     assert.equal(new URL(res.headers.get('location'), base).pathname, '/pin');
   }
-  for (const path of ['/api/compare', '/api/swimmer-races', '/api/sync-now']) {
-    const method = path === '/api/sync-now' ? 'POST' : 'GET';
+  for (const path of ['/api/compare', '/api/swimmer-races', '/api/sync-now', '/api/settings']) {
+    const method = path === '/api/sync-now' || path === '/api/settings' ? 'POST' : 'GET';
     assert.equal((await request(path, { method })).status, 401, path);
     assert.equal((await request(path, { method, headers: { cookie: cookie('kid') } })).status, 403, path);
   }
@@ -43,6 +43,10 @@ try {
   const kidPage = await request('/prehled', { headers: { cookie: cookie('kid') } });
   assert.equal(kidPage.status, 307);
   assert.equal(new URL(kidPage.headers.get('location'), base).pathname, '/viki');
+  // kid may open race detail pages, never parent-only paths dressed up as one
+  const kidRace = await request('/zavod/abc', { headers: { cookie: cookie('kid') } });
+  assert.equal(kidRace.status, 307);
+  assert.equal(new URL(kidRace.headers.get('location'), base).pathname, '/viki');
   assert.equal((await request('/api/compare', { headers: { cookie: cookie('kid').replace('.kid.', '.parent.') } })).status, 401);
 
   const login = pin => request('/api/pin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pin }) });

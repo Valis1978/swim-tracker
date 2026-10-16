@@ -1,4 +1,8 @@
 import { db, Swimmer, Result, RankingSnapshot, Badge } from "./db";
+import type { EntrySnapshot, HistoryItem } from "./entries";
+import type { PublicDoc } from "./sync_entries";
+import type { CspsHalfDay } from "./csps";
+import { niceTitle } from "./present";
 
 export async function getPrimary(): Promise<Swimmer | null> {
   const { data } = await db().from("swim_swimmers").select("*").eq("is_primary", true).eq("active", true).limit(1).maybeSingle();
@@ -128,4 +132,102 @@ export async function getAllOpenWater(): Promise<OwResultWithSwimmer[]> {
     .select("*, swimmer:swim_swimmers(*)")
     .order("swim_date", { ascending: false });
   return ((data ?? []) as OwResultWithSwimmer[]).filter((r) => r.swimmer && r.swimmer.active);
+}
+
+// ---- race entries -----------------------------------------------------------------
+
+
+export interface EntryRow extends EntrySnapshot {
+  id: string;
+  swimmer_id: string;
+  competition_csps_id: number;
+  event_no: number;
+  discipline: string;
+  discipline_title: string | null;
+  category_text: string | null;
+  half_day: number | null;
+  swim_date: string | null;
+  warmup_min: number | null;
+  start_min: number | null;
+  seed_ms: number | null;
+  seed_location: string | null;
+  seed_date: string | null;
+  result_points: number | null;
+  place_overall: number | null;
+  field_overall: number | null;
+  place_year: number | null;
+  field_year: number | null;
+  source: string | null;
+  history: HistoryItem[];
+}
+
+export interface CompetitionRow {
+  csps_id: number;
+  title: string;
+  location: string | null;
+  pool_length: number | null;
+  start_date: string;
+  end_date: string | null;
+  registration_end: string | null;
+  deregistration_end: string | null;
+  state: string | null;
+  halfdays: CspsHalfDay[] | null;
+  documents: PublicDoc[] | null;
+  has_startlist: boolean;
+  has_accepted: boolean;
+  has_results: boolean;
+}
+
+const COMP_COLS =
+  "csps_id,title,location,pool_length,start_date,end_date,registration_end,deregistration_end,state,halfdays,documents,has_startlist,has_accepted,has_results";
+
+export async function getSwimmerEntries(swimmerId: string): Promise<EntryRow[]> {
+  const { data } = await db()
+    .from("swim_entries")
+    .select("*")
+    .eq("swimmer_id", swimmerId)
+    .order("swim_date", { ascending: false })
+    .order("event_no");
+  return (data ?? []) as EntryRow[];
+}
+
+export async function getCompetitionsByIds(ids: number[]): Promise<Map<number, CompetitionRow>> {
+  if (!ids.length) return new Map();
+  const { data } = await db().from("swim_competitions").select(COMP_COLS).in("csps_id", ids);
+  return new Map(((data ?? []) as CompetitionRow[]).map((c) => [Number(c.csps_id), { ...c, title: niceTitle(c.title, c.location) }]));
+}
+
+export async function getCompetition(id: number): Promise<CompetitionRow | null> {
+  const { data } = await db().from("swim_competitions").select(COMP_COLS).eq("csps_id", id).maybeSingle();
+  const c = (data as CompetitionRow | null) ?? null;
+  return c ? { ...c, title: niceTitle(c.title, c.location) } : null;
+}
+
+export async function getCompetitionEntries(id: number): Promise<(EntryRow & { swimmer: Swimmer })[]> {
+  const { data } = await db()
+    .from("swim_entries")
+    .select("*, swimmer:swim_swimmers(*)")
+    .eq("competition_csps_id", id)
+    .order("event_no");
+  return ((data ?? []) as (EntryRow & { swimmer: Swimmer })[]).filter((e) => e.swimmer?.active);
+}
+
+export async function getResultsAt(competitionId: number, swimmerId: string): Promise<Result[]> {
+  const { data } = await db()
+    .from("swim_results")
+    .select("*")
+    .eq("competition_csps_id", competitionId)
+    .eq("swimmer_id", swimmerId);
+  return (data ?? []) as Result[];
+}
+
+export async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  const { data } = await db().from("swim_settings").select("value").eq("key", key).maybeSingle();
+  return (data?.value as T | undefined) ?? fallback;
+}
+
+// Parent decides whether the kid view shows placings at races.
+export async function kidSeesPlaces(): Promise<boolean> {
+  const v = await getSetting<{ on?: boolean }>("kid_show_places", { on: true });
+  return v.on !== false;
 }

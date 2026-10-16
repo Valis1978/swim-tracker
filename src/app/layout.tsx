@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Inter } from "next/font/google";
+import { Bricolage_Grotesque, Lexend } from "next/font/google";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -7,8 +7,9 @@ const bricolage = Bricolage_Grotesque({
   subsets: ["latin", "latin-ext"],
 });
 
-const inter = Inter({
-  variable: "--font-inter",
+// Lexend was designed for reading fluency — a good fit for a 10-year-old reader.
+const lexend = Lexend({
+  variable: "--font-lexend",
   subsets: ["latin", "latin-ext"],
 });
 
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0879a0",
+  themeColor: "#05273a",
   width: "device-width",
   initialScale: 1,
 };
@@ -39,7 +40,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="cs" className={`${bricolage.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="cs" className={`${bricolage.variable} ${lexend.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

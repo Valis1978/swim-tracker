@@ -38,7 +38,7 @@ export default async function PlavecPage({ params }: { params: Promise<{ id: str
   const days = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
       <div>
         <Link href="/prehled" className="text-sm text-pool-600 font-semibold">← Přehled</Link>
         <h1 className="text-3xl font-bold text-pool-800 mt-2">

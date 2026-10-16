@@ -10,7 +10,7 @@ export default async function DuelPage() {
   await requireRole(true);
   const swimmers = await getSwimmers();
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-4">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-4">
       <h1 className="text-2xl font-bold text-pool-800">Závod vs. závod ⚔️</h1>
       <PrehledTabs />
       <DuelClient

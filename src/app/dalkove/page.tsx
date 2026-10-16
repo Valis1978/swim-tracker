@@ -1,7 +1,8 @@
 import Nav from "@/components/Nav";
 import OpenWaterSection from "@/components/OpenWaterSection";
 import { requireRole } from "@/lib/auth";
-import { getPrimary, getOpenWaterResults, getAllOpenWater, OwResult } from "@/lib/queries";
+import { getPrimary, getOpenWaterResults, getAllOpenWater, kidSeesPlaces, OwResult } from "@/lib/queries";
+import { WaterHero } from "@/components/Pool";
 
 export const dynamic = "force-dynamic";
 
@@ -10,19 +11,26 @@ export default async function DalkovePage() {
 
   if (role === "kid") {
     const primary = await getPrimary();
-    const results = primary ? await getOpenWaterResults(primary.id) : [];
+    const [results, showPlace] = await Promise.all([primary ? getOpenWaterResults(primary.id) : Promise.resolve([]), kidSeesPlaces()]);
+    const done = results.filter((r) => r.status === "result");
     return (
-      <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
-        <header className="rounded-3xl bg-gradient-to-br from-pool-400 to-pool-700 text-white p-6 relative overflow-hidden">
-          <div className="absolute -right-3 -bottom-4 text-7xl opacity-25 float">🌊</div>
-          <p className="text-pool-100 text-sm font-medium">otevřená voda</p>
-          <h1 className="text-3xl font-bold mt-1">Dálkové plavání</h1>
-        </header>
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pb-32 pt-4">
+        <WaterHero>
+          <div className="px-5 pt-5 pb-4">
+            <p className="text-sm font-semibold text-pool-200">otevřená voda</p>
+            <h1 className="mt-1 text-[2.1rem] font-extrabold leading-none">Dálkové plavání</h1>
+            <p className="mt-2 text-sm text-pool-100/80">
+              {done.length} {done.length === 1 ? "odplavaný závod" : done.length < 5 ? "odplavané závody" : "odplavaných závodů"}
+            </p>
+          </div>
+        </WaterHero>
         {results.length > 0 ? (
-          <OpenWaterSection results={results} heading="Moje dálkové závody" kid />
+          <OpenWaterSection results={results} heading="Moje dálkové závody" kid showPlace={showPlace} />
         ) : (
-          <p className="text-center text-pool-900/50 text-sm py-8">
-            Zatím tu žádný dálkový závod není. 🌊<br />Až nějaký poplaveš, objeví se tu.
+          <p className="py-8 text-center text-sm text-pool-900/50">
+            Zatím tu žádný dálkový závod není.
+            <br />
+            Až nějaký poplaveš, objeví se tu.
           </p>
         )}
         <Nav role={role} />
@@ -47,9 +55,9 @@ export default async function DalkovePage() {
   const ordered = [...groups.values()].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.name.localeCompare(b.name, "cs"));
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 pb-32 pt-6">
       <header>
-        <h1 className="text-2xl font-bold text-pool-800">Dálkové plavání 🌊</h1>
+        <h1 className="text-[1.9rem] font-extrabold text-pool-900">Dálkové plavání</h1>
         <p className="text-sm text-pool-900/50 mt-1">
           Otevřená voda — vlastní svět svazu. Pořadí = umístění v závodě (celostátní žebříčky se pro dálkové nevedou).
         </p>
@@ -61,7 +69,7 @@ export default async function DalkovePage() {
           <OpenWaterSection
             key={g.name}
             results={g.results}
-            heading={`${g.isPrimary ? "⭐ " : ""}${g.name}`}
+            heading={g.name}
           />
         ))
       )}

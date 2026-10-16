@@ -21,7 +21,7 @@ export default async function PrehledPage() {
   const sorted = [...snapshots].sort((a, b) => order.indexOf(a.discipline) - order.indexOf(b.discipline));
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-6">
       <header>
         <h1 className="text-2xl font-bold text-pool-800">Přehled pro tátu 📊</h1>
         {snapshots[0] && (

@@ -141,72 +141,104 @@ export async function getCompetitions(year: number): Promise<CspsCompetitionRow[
   return get("/competitions", { year });
 }
 
-export interface CspsApplicationEntry {
-  userId: number;
-  disciplineCode: string;
-  disciplineTitle: string;
-  overLimit: boolean;
-  qualificationTime: number | null;
-  date: string;
+// ---- Entries with program structure (half-days, event numbers, seeds) ---------
+
+export interface CspsHalfDay {
+  order: number;
+  date: string; // YYYY-MM-DD
+  warmupMin: number | null; // minutes after midnight
+  startMin: number | null;
 }
 
-// All individual entries of a competition (pre-race applications, exact userId match)
-export async function getApplicationEntries(competitionId: number): Promise<CspsApplicationEntry[]> {
+export interface CspsEntryRow {
+  userId: number;
+  eventNo: number; // number in the meet program ("identification")
+  categoryId: number;
+  disciplineCode: string; // "100 Z"
+  disciplineTitle: string; // "100m Znak"
+  categoryText: string | null; // "Ženy 2012 - 2017"
+  halfDay: number;
+  date: string;
+  overLimit: boolean;
+  seedMs: number | null;
+  seedLocation: string | null;
+  seedDate: string | null;
+}
+
+export async function getCompetitionEntries(competitionId: number): Promise<{ halfDays: CspsHalfDay[]; entries: CspsEntryRow[] }> {
   const d = await get<{
-    halfDays: { date: string; competitionCategories: { disciplineCode: string; disciplineTitle: string; applications: { userId: number; overLimit: boolean; qualificationTime: number | null }[] }[] }[];
+    halfDays: {
+      order: number;
+      date: string;
+      startTime1: number | null;
+      startTime2: number | null;
+      competitionCategories: {
+        identification: number | null;
+        competitionCategoryId: number;
+        order: number;
+        disciplineCode: string;
+        disciplineTitle: string;
+        categoryText: string | null;
+        applications: { userId: number; overLimit: boolean; qualificationTime: number | null; qualificationLocation: string | null; qualificationDate: string | null }[];
+      }[];
+    }[];
   }>(`/competitions/${competitionId}/applications`);
-  const out: CspsApplicationEntry[] = [];
+  const halfDays: CspsHalfDay[] = [];
+  const entries: CspsEntryRow[] = [];
   for (const h of d.halfDays ?? []) {
+    const date = h.date.slice(0, 10);
+    halfDays.push({ order: h.order, date, warmupMin: h.startTime1 ?? null, startMin: h.startTime2 ?? null });
     for (const c of h.competitionCategories ?? []) {
       for (const a of c.applications ?? []) {
-        out.push({
+        entries.push({
           userId: a.userId,
+          eventNo: c.identification ?? c.order,
+          categoryId: c.competitionCategoryId,
           disciplineCode: c.disciplineCode,
           disciplineTitle: c.disciplineTitle,
+          categoryText: c.categoryText,
+          halfDay: h.order,
+          date,
           overLimit: a.overLimit,
-          qualificationTime: a.qualificationTime,
-          date: h.date,
+          seedMs: a.qualificationTime && a.qualificationTime < DSQ_THRESHOLD ? a.qualificationTime : null,
+          seedLocation: a.qualificationLocation ?? null,
+          seedDate: a.qualificationDate?.slice(0, 10) ?? null,
         });
       }
     }
   }
-  return out;
+  return { halfDays: halfDays.sort((a, b) => a.order - b.order), entries };
 }
 
-export interface StartListRow {
-  discipline: string;
-  lastName: string;
-  firstName: string;
-  birthYear: string;
-  club: string;
-  heat: number;
-  lane: number;
+export interface CspsDocument {
+  type: string;
+  fileName: string;
 }
 
-// OMEGA start list (after withdrawals): heat > 0 = seeded/accepted, heat 0 = reserve
-export async function getStartList(competitionId: number): Promise<StartListRow[] | null> {
-  const docs = await get<{ documents: { type: string; fileName: string }[] }>(`/competitions/${competitionId}/documents`);
-  const sl = (docs.documents ?? []).find((x) => x.type === "START_LIST_CSV");
-  if (!sl) return null;
-  const url = `${BASE}/competitions/${competitionId}/documents/${encodeURIComponent(sl.type)}?fileName=${encodeURIComponent(sl.fileName)}`;
-  const res = await fetch(url, { headers: { "User-Agent": UA }, cache: "no-store" });
-  if (!res.ok) return null;
-  const text = new TextDecoder("windows-1250").decode(await res.arrayBuffer());
-  const rows: StartListRow[] = [];
-  for (const line of text.split("\n")) {
-    const parts = line.trim().split(";");
-    if (parts.length < 13 || !/^\d+$/.test(parts[0])) continue;
-    rows.push({
-      discipline: parts[1].replaceAll('"', ""),
-      lastName: parts[3].replaceAll('"', ""),
-      firstName: parts[4].replaceAll('"', ""),
-      birthYear: parts[5].replaceAll('"', ""),
-      club: parts[7].replaceAll('"', ""),
-      heat: parseInt(parts[10]) || 0,
-      lane: parseInt(parts[11]) || 0,
-    });
-  }
-  return rows;
+export interface CspsCompetitionDocs {
+  competitionId: number;
+  title: string;
+  competitionState: string | null;
+  registrationEndDate: string | null; // local Prague time
+  deregistrationEndDate: string | null;
+  documents: CspsDocument[];
+}
+
+export async function getCompetitionDocs(competitionId: number): Promise<CspsCompetitionDocs> {
+  const d = await get<CspsCompetitionDocs>(`/competitions/${competitionId}/documents`);
+  return { ...d, documents: d.documents ?? [] };
+}
+
+export function documentUrl(competitionId: number, doc: CspsDocument): string {
+  return `${BASE}/competitions/${competitionId}/documents/${encodeURIComponent(doc.type)}?fileName=${encodeURIComponent(doc.fileName)}`;
+}
+
+export async function downloadDocument(competitionId: number, doc: CspsDocument): Promise<ArrayBuffer | null> {
+  const wait = lastCall + THROTTLE_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastCall = Date.now();
+  const res = await fetch(documentUrl(competitionId, doc), { headers: { "User-Agent": UA }, cache: "no-store" });
+  return res.ok ? res.arrayBuffer() : null;
 }
 
 // ---- Open water (dálkové plavání, sport 2) -------------------------------

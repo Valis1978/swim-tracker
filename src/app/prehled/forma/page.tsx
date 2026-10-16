@@ -60,7 +60,7 @@ export default async function FormaPage() {
   const lastDate = snaps[snaps.length - 1]?.snapshot_date;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-4">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 flex flex-col gap-4">
       <h1 className="text-2xl font-bold text-pool-800">Forma vs. pole 📉</h1>
       <PrehledTabs />
       {firstDate && lastDate && firstDate !== lastDate ? (

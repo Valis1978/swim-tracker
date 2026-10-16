@@ -61,6 +61,6 @@ test('chunked PIN request is capped even without a Content-Length header', async
   assert.equal(cancelled, true);
 });
 test('return path rejects JavaScript, external URLs, encoded separators and unrecognized paths', () => {
-  for (const path of ['javascript:alert(1)', 'https://other.test/', '//other.test/', '/\\other.test', '/%2f%2fother.test', '/viki?next=bad', '/api/sync', null]) assert.equal(safeLoginPath(path), '/viki');
-  for (const path of ['/', '/prehled', '/prehled/duel', '/nastaveni', '/plavec/fixture-id', '/dalkove']) assert.equal(safeLoginPath(path), path);
+  for (const path of ['javascript:alert(1)', 'https://other.test/', '//other.test/', '/\\other.test', '/%2f%2fother.test', '/viki?next=bad', '/api/sync', '/zavod/abc', '/zavod/1/x', null]) assert.equal(safeLoginPath(path), '/viki');
+  for (const path of ['/', '/prehled', '/prehled/duel', '/nastaveni', '/plavec/fixture-id', '/dalkove', '/rekordy', '/zavod/10813']) assert.equal(safeLoginPath(path), path);
 });

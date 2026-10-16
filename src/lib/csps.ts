@@ -1,5 +1,7 @@
 // Client for the public (undocumented) CSPS portal REST API.
 // Be polite: low frequency, throttled, identified UA, cache everything in our DB.
+import { displayName } from "./entry_docs";
+
 const BASE = "https://vysledky.czechswimming.cz/cz.zma.csps.portal.rest/api/public";
 const UA = "swim-tracker/1.0 (vlastimil.valenta@gmail.com)";
 
@@ -290,10 +292,20 @@ export interface OwOutput {
   birthYear: number;
   heat: number | null; // "group" in CSPS results
   lane: number | null; // "line"
+  name: string; // "Anna Nováková" (public results)
+  club: string; // club abbreviation
 }
 
 export async function getCategoryOutputs(categoryId: number): Promise<OwOutput[]> {
-  const d = await get<{ singleOutputs: (Omit<OwOutput, "heat" | "lane"> & { group?: string | number | null; line?: string | number | null })[] }>(
+  const d = await get<{
+    singleOutputs: (Omit<OwOutput, "heat" | "lane" | "name" | "club"> & {
+      group?: string | number | null;
+      line?: string | number | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      clubAbbrev?: string | null;
+    })[];
+  }>(
     `/competitions/categories/${categoryId}/outputs`
   );
   const num = (v: string | number | null | undefined) => (v == null || v === "" || Number.isNaN(Number(v)) ? null : Number(v));
@@ -304,5 +316,7 @@ export async function getCategoryOutputs(categoryId: number): Promise<OwOutput[]
     birthYear: o.birthYear,
     heat: num(o.group),
     lane: num(o.line),
+    name: displayName(o.firstName ?? "", o.lastName ?? ""),
+    club: o.clubAbbrev ?? "",
   }));
 }

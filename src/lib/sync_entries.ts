@@ -153,6 +153,9 @@ interface EntryRow extends EntrySnapshot {
   history: HistoryItem[];
 }
 
+// heats stored before names were kept are refreshed once from the results
+const unnamed = (f: unknown) => ((f as RaceField | null)?.racers ?? []).some((r) => !r.me && r.name === undefined);
+
 const snapOf = (r: EntryRow): EntrySnapshot => ({
   status: r.status,
   reserve_no: r.reserve_no,
@@ -410,7 +413,7 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
           const pre: RaceField = {
             heat: final.snap.heat,
             pre: true,
-            racers: lineup.map((r) => ({ lane: r.lane, year: r.year, time: r.seedMs ?? 0, me: r.me, club: r.club })),
+            racers: lineup.map((r) => ({ lane: r.lane, year: r.year, time: r.seedMs ?? 0, me: r.me, club: r.club, name: r.name })),
             year: [],
           };
           await db()
@@ -424,7 +427,7 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
       }
       const catId = t.app?.categoryId ?? t.row?.category_id ?? null;
       const recent = (comp.endDate ?? comp.startDate) >= addDays(today, -2);
-      if (catId && (final.snap.status === "swum" || final.snap.status === "dsq") && (!t.row?.places_checked_at || recent || !t.row?.field)) {
+      if (catId && (final.snap.status === "swum" || final.snap.status === "dsq") && (!t.row?.places_checked_at || recent || !t.row?.field || unnamed(t.row.field))) {
         placesTodo.push({ swimmer: t.swimmer, eventNo: t.eventNo, disc: t.disc, catId });
       }
     }
@@ -444,7 +447,7 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
       if (!outs.length) continue;
       const valid = outs.filter((o) => o.order > 0 && o.time > 0 && o.time < csps.DSQ_THRESHOLD);
       const me = valid.find((o) => o.userId === p.swimmer.csps_user_id);
-      const sameYear = valid.filter((o) => o.birthYear === p.swimmer.birth_year);
+      const sameYear = valid.filter((o) => o.birthYear === p.swimmer.birth_year).sort((a, b) => a.time - b.time);
       const heatNo = outs.find((o) => o.userId === p.swimmer.csps_user_id)?.heat ?? null;
       const field: RaceField = {
         heat: heatNo,
@@ -453,9 +456,12 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
             ? []
             : valid
                 .filter((o) => o.heat === heatNo && o.lane != null)
-                .map((o) => ({ lane: o.lane as number, year: o.birthYear, time: o.time, me: o.userId === p.swimmer.csps_user_id }))
+                .map((o) => ({ lane: o.lane as number, year: o.birthYear, time: o.time, me: o.userId === p.swimmer.csps_user_id, club: o.club, name: o.name }))
                 .sort((a, b) => a.lane - b.lane),
-        year: sameYear.map((o) => o.time).sort((a, b) => a - b),
+        year: sameYear.map((o) => o.time),
+        yearNames: sameYear.map((o) => o.name),
+        yearClubs: sameYear.map((o) => o.club),
+        ...(me ? { yearMe: sameYear.indexOf(me) } : {}),
       };
       const { error } = await db()
         .from("swim_entries")

@@ -31,6 +31,10 @@ export function replayParamsFor(
     heatNo: e.field?.heat ?? e.heat ?? null,
     heat: o.showField ? (e.field?.racers ?? null) : null,
     year: o.showField ? (e.field?.year ?? null) : null,
+    yearNames: o.showField ? (e.field?.yearNames ?? null) : null,
+    yearClubs: o.showField ? (e.field?.yearClubs ?? null) : null,
+    yearMe: e.field?.yearMe ?? null,
+    nick: o.nick,
     birthYear: o.birthYear,
   };
 }
@@ -53,6 +57,7 @@ export function previewParamsFor(e: EntryRow, comp: CompetitionRow, o: { nick: s
     heatNo: e.field.heat,
     heat: e.field.racers,
     year: null,
+    nick: o.nick,
     birthYear: o.birthYear,
     predicted: true,
   };

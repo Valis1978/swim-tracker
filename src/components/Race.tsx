@@ -48,6 +48,78 @@ export function EntryStory({ entry }: { entry: EntryRow }) {
   );
 }
 
+const girls = (n: number) => `${n} ${n < 5 ? "plavkyně" : "plavkyň"}`;
+
+// one swimmer in a heat or birth-year list: her row says "ty"; the others go by name (public results), with year and club under it
+function Person({ name, sub, me }: { name: string; sub?: string; me: boolean }) {
+  return (
+    <span className="min-w-0 flex-1 leading-tight">
+      <span className="block truncate">{me ? "ty" : name}</span>
+      {!me && sub && <span className="block truncate text-[11px] font-normal text-pool-900/45">{sub}</span>}
+    </span>
+  );
+}
+
+const subOf = (year: number | null | undefined, club: string | null | undefined) => [year || "", club ?? ""].filter(Boolean).join(" · ");
+
+const rowCls = (me: boolean) => `flex items-center gap-3 py-1.5 text-sm ${me ? "-mx-1.5 rounded-xl bg-[#fff6d6] px-1.5 font-bold text-pool-900" : "text-pool-900/75"}`;
+const badgeCls = (me: boolean) =>
+  `grid h-6 w-6 shrink-0 place-items-center rounded-md text-xs font-bold ${me ? "bg-[#ffe07a] text-[#7a4b00]" : "bg-pool-50 text-pool-700"}`;
+
+// after the race: who swam in her heat and how her birth year finished, by name and time
+export function FieldResults({ field, birthYear }: { field: RaceField; birthYear: number | null }) {
+  const heat = field.racers.filter((r) => r.time > 0).sort((a, b) => a.time - b.time);
+  const year =
+    field.yearNames && field.yearNames.length === field.year.length
+      ? field.year.map((t, i) => ({ t, name: field.yearNames![i], club: field.yearClubs?.[i] ?? "", me: i === field.yearMe }))
+      : null;
+  const showHeat = heat.length > 1 && heat.some((r) => !r.me && r.name);
+  const showYear = !!year && year.length > 1;
+  if (!showHeat && !showYear) return null;
+  return (
+    <details className="group mt-3 rounded-2xl ring-1 ring-pool-100">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-pool-800 [&::-webkit-details-marker]:hidden">
+        Kdo plaval s tebou
+        <ChevronGlyph size={18} className="shrink-0 text-pool-400 transition group-open:rotate-90" />
+      </summary>
+      <div className="space-y-3 px-3 pb-2">
+        {showHeat && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-pool-900/45">
+              Rozplavba {field.heat} · {girls(heat.length)}
+            </p>
+            <ol className="divide-y divide-pool-50">
+              {heat.map((r, i) => (
+                <li key={r.lane} className={rowCls(r.me)}>
+                  <span className={badgeCls(r.me)}>{i + 1}.</span>
+                  <Person name={r.name ?? subOf(r.year, r.club)} sub={r.name ? subOf(r.year, r.club) : undefined} me={r.me} />
+                  <span className="nums shrink-0">{fmtTime(r.time)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {showYear && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-pool-900/45">
+              Ročník {birthYear ?? ""} · {girls(year!.length)}
+            </p>
+            <ol className="divide-y divide-pool-50">
+              {year!.map((r, i) => (
+                <li key={i} className={rowCls(r.me)}>
+                  <span className={badgeCls(r.me)}>{i + 1}.</span>
+                  <Person name={r.name} sub={r.club} me={r.me} />
+                  <span className="nums shrink-0">{fmtTime(r.t)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export function EventCard({
   entry,
   birthYear,
@@ -59,6 +131,7 @@ export function EventCard({
   replay,
   lineup,
   preview,
+  results,
 }: {
   entry: EntryRow;
   birthYear: number | null;
@@ -70,6 +143,7 @@ export function EventCard({
   replay?: ReplayParams;
   lineup?: RaceField | null; // her heat from the start list (before the race)
   preview?: ReplayParams; // the heat swum at everyone's entry times
+  results?: RaceField | null; // her heat and birth year after the race
 }) {
   const st = statusLabel(entry);
   const stroke = strokeOf(entry.discipline);
@@ -127,9 +201,10 @@ export function EventCard({
           {entry.status === "reserve" && <p className="mt-1 text-xs text-[#8a5300]/80">{st.hint}</p>}
           {place?.overall && <p className="mt-1 text-xs text-pool-900/45">{place.overall}</p>}
           {showStory && <EntryStory entry={entry} />}
-          {replay && <RaceReplay params={replay} />}
         </div>
       </div>
+      {replay && <RaceReplay params={replay} />}
+      {results && <FieldResults field={results} birthYear={birthYear} />}
       {entry.status === "drawn" && entry.lane != null && (
         <div className="mt-3 flex items-center gap-4 rounded-2xl bg-pool-50 p-3 ring-1 ring-pool-100">
           <LaneMap lane={entry.lane} label={`dráha ${entry.lane}`} />
@@ -145,14 +220,13 @@ export function EventCard({
       {lineup && lineup.racers.length > 1 && (
         <div className="mt-3 rounded-2xl ring-1 ring-pool-100">
           <p className="px-3 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-pool-900/45">
-            Tvoje rozplavba · {lineup.racers.length} {lineup.racers.length < 5 ? "plavkyně" : "plavkyň"}
+            Tvoje rozplavba · {girls(lineup.racers.length)}
           </p>
           <ul className="divide-y divide-pool-50 px-3 pb-1">
             {lineup.racers.map((r) => (
-              <li key={r.lane} className={`flex items-center gap-3 py-1.5 text-sm ${r.me ? "font-bold text-pool-900" : "text-pool-900/70"}`}>
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md text-xs font-bold ${r.me ? "bg-[#ffe07a] text-[#7a4b00]" : "bg-pool-50 text-pool-700"}`}>{r.lane}</span>
-                <span className="w-12 shrink-0">{r.me ? "ty" : r.year || "—"}</span>
-                <span className="min-w-0 flex-1 truncate">{r.club}</span>
+              <li key={r.lane} className={rowCls(r.me)}>
+                <span className={badgeCls(r.me)}>{r.lane}</span>
+                <Person name={r.name ?? subOf(r.year, r.club)} sub={r.name ? subOf(r.year, r.club) : undefined} me={r.me} />
                 <span className="nums shrink-0">{r.time > 0 ? fmtTime(r.time) : "bez času"}</span>
               </li>
             ))}

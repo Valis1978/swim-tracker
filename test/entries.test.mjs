@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normDisc, parseSeed, parseAcceptedList, parseOmegaCsv, parseStartListPdf, personKey, rows, heatLineup } from '../src/lib/entry_docs.ts';
+import { normDisc, parseSeed, parseAcceptedList, parseOmegaCsv, parseStartListPdf, personKey, rows, heatLineup, displayName, shortName } from '../src/lib/entry_docs.ts';
 import { resolveStatus, changeText, raceSteps, changed, snapshot } from '../src/lib/entries.ts';
 
 // Synthetic swimmers only — the repository is public.
@@ -63,7 +63,10 @@ test('heat lineup: everyone in her heat by lane, with year, club and entry time'
     '8;"50P";3;"DVOŘÁKOVÁ";"Lea";"2016";"Z";"KLUB";-;0;1;5;01.01.2026;"";""',
     '8;"50P";4;"ČERNÁ";"Ema";"2016";"Z";"JINY";00:50,00;0;2;4;01.01.2026;"";""'].join('\n');
   const lineup = heatLineup(parseOmegaCsv(csv), 8, 1, ANNA);
-  assert.deepEqual(lineup.map((r) => [r.lane, r.year, r.club, r.seedMs, r.me]), [[3, 2015, 'KLUB', 55100, false], [4, 2016, 'TEST', 57900, true], [5, 2016, 'KLUB', null, false]]);
+  assert.deepEqual(lineup.map((r) => [r.lane, r.name, r.year, r.club, r.seedMs, r.me]), [[3, 'Eva Svobodová', 2015, 'KLUB', 55100, false], [4, 'Anna Nováková', 2016, 'TEST', 57900, true], [5, 'Lea Dvořáková', 2016, 'KLUB', null, false]]);
+  assert.equal(displayName('Klaudia Neves', 'FRAGUELA-NOVÁ'), 'Klaudia Neves Fraguela-Nová');
+  assert.equal(shortName('Klaudia Neves Fraguela'), 'Klaudia F.');
+  assert.equal(displayName('Ema', 'Černá'), 'Ema Černá');
 });
 
 test('start list PDF: two-column heats and reserves resolve to the right event', () => {

@@ -143,6 +143,7 @@ export default async function ZavodPage({ params }: { params: Promise<{ id: stri
                 {list.map((e) => (
                   <EventCard key={e.id} entry={e} birthYear={primary.birth_year} parent={parent} kidPlaces={kidPlaces} pb={pbOf(e)} delay={(order.get(e.id) ?? 0) * 60 + 60} firstEver={!swumBefore.has(e.discipline)} replay={replayOf(e)}
                     lineup={(parent || kidPlaces) && e.status === "drawn" && e.field?.pre ? e.field : null}
+                    results={(parent || kidPlaces) && e.status === "swum" && e.field && !e.field.pre ? e.field : null}
                     preview={parent || kidPlaces ? previewParamsFor(e, comp, { nick: NICK, cap: look.cap, birthYear: primary.birth_year }) : undefined}
                   />
                 ))}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-16 — Jména soupeřek / Rivals by name
+
+**CZ:** Viki vidí jména ostatních plavkyň (veřejné výsledky a startovky svazu): v přehrání rozplavby i ročníku (sloupec jmen u drah jako v televizi, do 15 drah), v seznamu „Tvoje rozplavba“ před závodem a v novém rozbalovacím seznamu „Kdo plaval s tebou“ (rozplavba + celý ročník s časy). Přehrání je přes celou šířku karty, písmo větší. Jména se ukládají ze startovky OMEGA a z výsledků kategorie; starší závody doplněny. Zobrazuje se jen se zapnutým pořadím.
+
+**EN:** Rival names (public CSPS results and start lists) in heat and birth-year replays (TV-style lane list, up to 15 lanes), the pre-race heat lineup and a new collapsible "Kdo plaval s tebou" list (heat + birth year with times). Replay spans the full card width with larger type. Names stored from the OMEGA start list and category results; past meets backfilled. Shown only when placings are enabled.
+
 ## 2026-10-16 (soupeřky)
 
 ### CZ

@@ -32,8 +32,11 @@ export type Tone = "wait" | "reserve" | "ok" | "drawn" | "off" | "done" | "dsq";
 // Who swam with her: her heat (lane, birth year, time) and every time of her birth year in that event.
 export interface RaceField {
   heat: number | null;
-  racers: { lane: number; year: number; time: number; me: boolean; club?: string }[];
+  racers: { lane: number; year: number; time: number; me: boolean; club?: string; name?: string }[];
   year: number[]; // sorted times of swimmers born the same year (hers included)
+  yearNames?: string[]; // their names, in the same order (public results)
+  yearClubs?: string[];
+  yearMe?: number; // her index in `year`
   pre?: boolean; // from the start list before the race: `time` is the entry time (0 = none)
 }
 

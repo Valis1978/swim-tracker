@@ -5,6 +5,7 @@
 // Pacing is modelled (first length a bit faster after the dive); kids' races carry no per-length splits.
 import { E, clamp, rnd, type Scene, type SceneFactory } from "./engine";
 import { capOf, type CapKey } from "./look";
+import { shortName } from "../entry_docs";
 
 export type ReplayMode = "ghost" | "heat" | "year";
 
@@ -19,8 +20,12 @@ export interface ReplayParams {
   lane: number | null; // her lane, when known
   cap?: CapKey;
   heatNo?: number | null;
-  heat?: { lane: number; year: number; time: number; me: boolean }[] | null;
+  heat?: { lane: number; year: number; time: number; me: boolean; name?: string; club?: string }[] | null;
   year?: number[] | null; // sorted times of swimmers born the same year
+  yearNames?: string[] | null; // their names, same order
+  yearClubs?: string[] | null;
+  yearMe?: number | null; // her index in `year`
+  nick?: string; // her name in the lane list
   birthYear?: number | null;
   predicted?: boolean; // before the race: everyone swims her entry time
 }
@@ -67,6 +72,16 @@ interface Racer {
   me: boolean;
   ghost: boolean;
   tag?: string;
+  name?: string; // in the lane list left of the pool
+  sub?: string; // "2015 · KPSVy"
+}
+
+// cut a label to the given width with an ellipsis
+function fit(c: CanvasRenderingContext2D, s: string, w: number): string {
+  if (c.measureText(s).width <= w) return s;
+  let t = s;
+  while (t.length > 1 && c.measureText(`${t}…`).width > w) t = t.slice(0, -1);
+  return `${t.trimEnd()}…`;
 }
 
 export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneFactory => (st) => {
@@ -75,12 +90,29 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
   let lanes: number;
   if (mode === "heat" && p.heat && p.heat.filter((r) => r.time > 0).length > 1) {
     lanes = Math.max(8, ...p.heat.map((r) => r.lane));
-    racers = p.heat.filter((r) => r.time > 0).map((r) => ({ lane: r.lane - 1, total: r.time, me: r.me, ghost: false, tag: r.me ? undefined : String(r.year) }));
+    racers = p.heat
+      .filter((r) => r.time > 0)
+      .map((r) => ({
+        lane: r.lane - 1,
+        total: r.time,
+        me: r.me,
+        ghost: false,
+        tag: r.me ? undefined : String(r.year),
+        name: r.me ? (p.nick ?? "ty") : r.name ? shortName(r.name) : undefined,
+        sub: r.me ? undefined : [r.year || "", r.club ?? ""].filter(Boolean).join(" · ") || undefined,
+      }));
   } else if (mode === "year" && p.year && p.year.length > 1) {
     lanes = p.year.length;
-    let meIdx = p.year.indexOf(p.me);
+    let meIdx = p.yearMe != null && p.year[p.yearMe] === p.me ? p.yearMe : p.year.indexOf(p.me);
     if (meIdx < 0) meIdx = Math.max(0, p.year.findIndex((t) => t >= p.me));
-    racers = p.year.map((t, i) => ({ lane: i, total: t, me: i === meIdx, ghost: false }));
+    racers = p.year.map((t, i) => ({
+      lane: i,
+      total: t,
+      me: i === meIdx,
+      ghost: false,
+      name: i === meIdx ? (p.nick ?? "ty") : p.yearNames?.[i] ? shortName(p.yearNames[i]) : undefined,
+      sub: i === meIdx ? undefined : p.yearClubs?.[i] || undefined,
+    }));
   } else {
     lanes = Math.max(8, (p.lane ?? 4) + (p.lane === 8 ? 0 : 1));
     const myLane = clamp((p.lane ?? 4) - 1, 0, lanes - 1);
@@ -92,11 +124,16 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
   const speed = total < 70_000 ? 4 : total < 150_000 ? 8 : 12;
   const lead = 450;
   const end = lead + total / speed + 2600;
-  const X0 = 26;
-  const X1 = 380;
   const Y0 = 54;
   const LANE = Math.min(28, 214 / lanes);
   const compact = LANE < 12;
+  // the girls' names next to their lanes, like on TV (when known and the lanes are tall enough to read them)
+  const named = LANE >= 14 && racers.some((r) => !r.me && r.name);
+  const twoLine = named && LANE >= 20;
+  const nameSize = LANE >= 24 ? 11.5 : LANE >= 18 ? 10 : 8.5;
+  const subSize = LANE >= 24 ? 8.5 : 7.5;
+  const X0 = named ? 112 : 26;
+  const X1 = 380;
   const mx = (m: number) => X0 + ((X1 - X0) * m) / p.pool;
   const flagM = 5;
   const sorted = [...racers].filter((r) => !r.ghost).sort((a, b) => a.total - b.total);
@@ -216,6 +253,29 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
         c.fillText(String(i + 1), 15.5, cy + 3);
       }
     }
+    if (named) {
+      c.textAlign = "left";
+      const maxW = X0 - 31;
+      for (const r of racers) {
+        const cy = Y0 + LANE * r.lane + LANE / 2;
+        if (r.me) {
+          c.fillStyle = "#ffe07a";
+          c.beginPath();
+          c.roundRect(25, cy - LANE / 2 + 1.5, X0 - 27, LANE - 3, 6);
+          c.fill();
+        }
+        if (!r.name) continue;
+        const two = twoLine && !!r.sub;
+        c.fillStyle = r.me ? "#5a3900" : "#0a2231";
+        c.font = `${r.me ? 800 : 700} ${nameSize}px Lexend, system-ui, sans-serif`;
+        c.fillText(fit(c, r.name, maxW), 29, two ? cy - 1 : cy + nameSize * 0.36);
+        if (two) {
+          c.fillStyle = "#4f7181";
+          c.font = `500 ${subSize}px Lexend, system-ui, sans-serif`;
+          c.fillText(fit(c, r.sub!, maxW), 29, cy + subSize + 0.5);
+        }
+      }
+    }
     c.fillStyle = "#3a5f70";
     c.font = "500 8px Lexend, system-ui, sans-serif";
     c.textAlign = "left";
@@ -246,6 +306,13 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
       c.setTransform(st.k, 0, 0, st.k, 0, 0);
       poolArt(c);
       const raceMs = Math.max(0, (state.t - lead) * speed);
+      // with the lane list, swimmers stay in the water: at the walls they are cut by the pool edge
+      c.save();
+      if (named) {
+        c.beginPath();
+        c.rect(X0 - 1, Y0 - 6, X1 - X0 + 2, LANE * lanes + 12);
+        c.clip();
+      }
       // others first, Viki on top
       for (const r of [...racers].sort((a, b) => Number(a.me) - Number(b.me))) {
         const d = distanceAt(raceMs, r.total, p.distance, p.pool);
@@ -253,7 +320,7 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
         const y = Y0 + LANE * r.lane + LANE / 2;
         swimmer(c, mx(m), y, dir, raceMs / 180 + r.lane, r);
         const finished = raceMs >= r.total;
-        if (r.tag && !compact && !finished) {
+        if (r.tag && !compact && !named && !finished) {
           c.fillStyle = "rgba(10,34,49,.55)";
           c.font = "600 7.5px Lexend, system-ui, sans-serif";
           c.textAlign = "right";
@@ -262,22 +329,24 @@ export const replayScene = (p: ReplayParams, mode: ReplayMode = "ghost"): SceneF
         if (finished && (!compact || r.me)) {
           const atStart = m < p.pool / 2;
           c.textAlign = atStart ? "left" : "right";
-          const x = atStart ? mx(0) + 30 : mx(p.pool) - 30;
+          const x = atStart ? mx(0) + 32 : mx(p.pool) - 32;
+          const big = LANE >= 18;
           if (r.me) {
             c.fillStyle = "#ffd23f";
-            c.font = "800 9px Lexend, system-ui, sans-serif";
-            c.fillText(mode === "ghost" ? fmtRace(r.total) : `${placeOf(r)}. · ${fmtRace(r.total)}`, x, y + 3);
+            c.font = `800 ${big ? 10.5 : 9}px Lexend, system-ui, sans-serif`;
+            c.fillText(mode === "ghost" ? fmtRace(r.total) : `${placeOf(r)}. · ${fmtRace(r.total)}`, x, y + 3.5);
           } else if (r.ghost) {
             c.fillStyle = "rgba(255,255,255,.9)";
-            c.font = "700 9px Lexend, system-ui, sans-serif";
-            c.fillText(fmtRace(r.total), x, y + 3);
+            c.font = `700 ${big ? 10 : 9}px Lexend, system-ui, sans-serif`;
+            c.fillText(fmtRace(r.total), x, y + 3.5);
           } else {
-            c.fillStyle = "rgba(255,255,255,.85)";
-            c.font = "700 8px Lexend, system-ui, sans-serif";
-            c.fillText(`${placeOf(r)}.`, x, y + 3);
+            c.fillStyle = "rgba(255,255,255,.9)";
+            c.font = `700 ${big ? 9.5 : 8}px Lexend, system-ui, sans-serif`;
+            c.fillText(named ? `${placeOf(r)}. · ${fmtRace(r.total)}` : `${placeOf(r)}.`, x, y + 3.5);
           }
         }
       }
+      c.restore();
       // clock + legend
       c.fillStyle = "#ffffff";
       c.font = "800 20px Bricolage Grotesque, Lexend, system-ui, sans-serif";

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-18 — Výsledky hned po závodě / Results right after the meet
+
+**CZ:** Svaz zpracuje výsledky do své databáze až za několik dní, pořadatel ale hned po závodě nahraje soubor LENEX. Appka z něj teď bere časy, mezičasy, body, pořadí, rozplavby a jména soupeřek (výsledky označené `source = lenex`). Jakmile svaz výsledky zpracuje, oficiální data je nahradí (bez dvojího upozornění).
+
+**EN:** CSPS imports results days after a meet, but organisers publish a LENEX file right away. The app now reads times, splits, points, placings, heats and rival names from it (`swim_results.source = 'lenex'`); official CSPS rows replace them once imported (no duplicate notifications). New `src/lib/lenex.ts` (zip + XML parser, unit-tested on synthetic data).
+
 ## 2026-10-16 — Samoaktualizace / Self-update
 
 **CZ:** Appka přidaná na plochu telefonu drží starou stránku v paměti klidně několik dní a nemá tlačítko obnovit. Nově se při každém návratu do appky (a každých 10 minut) zeptá serveru na verzi (`/api/version`) a při nové verzi se jednou sama načte znovu (bez smyčky).

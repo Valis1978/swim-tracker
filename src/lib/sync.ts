@@ -4,7 +4,7 @@ import { scrapeOpenWaterResults, distanceKey } from "./openwater_scrape";
 import { fmtTime, fmtDelta, disciplineLabel } from "./format";
 import { addDays, pragueToday } from "./time";
 import { sendTelegram } from "./telegram";
-import { scanEntries } from "./sync_entries";
+import { loadLenex, scanEntries } from "./sync_entries";
 
 const RANKING_DISCIPLINES = ["50 P", "100 P", "50 K", "50 Z", "100 Z"];
 
@@ -44,6 +44,9 @@ export async function runSync(opts: { backfillFrom?: string } = {}): Promise<{ n
       notes.push(`sync ${s.last_name}: ${(e as Error).message}`);
     }
   }
+  const lx = await syncLenexResults((swimmers ?? []) as Swimmer[], titleMap, notes);
+  events.push(...lx.events);
+  inserted += lx.inserted;
 
   await notifyResults(events);
 
@@ -128,6 +131,9 @@ export async function runLiveSync(): Promise<{ skipped: boolean; newResults: num
       notes.push(`sync ${s.last_name}: ${(e as Error).message}`);
     }
   }
+  const lx = await syncLenexResults((swimmers ?? []) as Swimmer[], titleMap, notes);
+  events.push(...lx.events);
+  inserted += lx.inserted;
   await notifyResults(events);
   const primary = ((swimmers ?? []) as Swimmer[]).find((s) => s.is_primary);
   if (primary && inserted) await computeBadges(primary);
@@ -148,12 +154,30 @@ async function syncSwimmer(s: Swimmer, titleMap: Map<number, { title: string; lo
     disciplinePools.get(o.disciplineCode)!.add(o.poolLength);
   }
 
+  // official rows of every discipline first, so rows taken from a LENEX file can be replaced meet by meet
+  const official: { disc: string; pool: number; r: csps.CspsImprovementRow }[] = [];
+  for (const [disc, pools] of disciplinePools) {
+    for (const pool of pools) for (const r of await csps.getImprovements(s.csps_user_id, pool, disc)) official.push({ disc, pool, r });
+  }
+  const officialMeets = [...new Set(official.map((o) => o.r.competitionId).filter((c) => c != null))];
+  const replaced = new Set<string>();
+  if (officialMeets.length) {
+    const { data: gone } = await db()
+      .from("swim_results")
+      .delete()
+      .eq("swimmer_id", s.id)
+      .eq("source", "lenex")
+      .in("competition_csps_id", officialMeets)
+      .select("discipline,pool_length,time_ms,swim_date,is_split");
+    for (const r of gone ?? []) replaced.add(`${r.discipline}|${r.pool_length}|${r.swim_date}|${r.time_ms}|${r.is_split}`);
+  }
+
   const { data: existing } = await db()
     .from("swim_results")
     .select("discipline,pool_length,time_ms,swim_date,is_split")
     .eq("swimmer_id", s.id);
   const known = new Set((existing ?? []).map((r) => `${r.discipline}|${r.pool_length}|${r.swim_date}|${r.time_ms}|${r.is_split}`));
-  const isBackfill = known.size === 0;
+  const isBackfill = known.size === 0 && replaced.size === 0;
 
   // map of best non-split 25m+50m PBs before this sync, per discipline|pool
   const pbBefore = new Map<string, number>();
@@ -168,40 +192,122 @@ async function syncSwimmer(s: Swimmer, titleMap: Map<number, { title: string; lo
 
   const events: NewResultEvent[] = [];
   let inserted = 0;
-  for (const [disc, pools] of disciplinePools) {
-    for (const pool of pools) {
-      const rows = await csps.getImprovements(s.csps_user_id, pool, disc);
-      for (const r of rows) {
-        const date = r.date.slice(0, 10);
-        const key = `${disc}|${pool}|${date}|${r.time}|${r.splitTime}`;
+  for (const { disc, pool, r } of official) {
+    const date = r.date.slice(0, 10);
+    const key = `${disc}|${pool}|${date}|${r.time}|${r.splitTime}`;
+    if (known.has(key)) continue;
+    const isDsq = r.time >= csps.DSQ_THRESHOLD;
+    const comp = titleMap?.get(r.competitionId);
+    const { error } = await db().from("swim_results").insert({
+      swimmer_id: s.id,
+      discipline: disc,
+      pool_length: pool,
+      time_ms: r.time,
+      is_dsq: isDsq,
+      is_split: r.splitTime,
+      points: pointsByKey.get(`${disc}|${pool}|${date}|${r.time}`) ?? null,
+      swim_date: date,
+      competition_csps_id: r.competitionId,
+      competition_title: comp?.title ?? null,
+      location: r.location,
+    });
+    if (error && !error.message.includes("duplicate")) throw error;
+    known.add(key);
+    inserted += 1;
+    if (r.splitTime || isDsq) continue;
+    const k = `${disc}|${pool}`;
+    const prev = pbBefore.get(k) ?? null;
+    if (prev === null || r.time < prev) pbBefore.set(k, r.time);
+    // a result taken from the organiser's file was announced already
+    if (isBackfill || replaced.has(key)) continue;
+    events.push({ swimmer: s, discipline: disc, pool, timeMs: r.time, date, location: r.location, isPB: prev === null || r.time < prev, prevPbMs: prev, isDsq });
+  }
+  return { events, inserted };
+}
+
+const DSQ_MS = csps.DSQ_THRESHOLD + 39_990; // how CSPS stores a disqualification
+const SPLIT_DISTANCES = new Set([50, 100, 200, 400, 800]);
+
+// Results of the last days from the organiser's LENEX file, for swimmers CSPS has no results for yet.
+// Inserted with source "lenex"; syncSwimmer replaces them once CSPS imports the meet.
+async function syncLenexResults(
+  swimmers: Swimmer[],
+  titleMap: Map<number, { title: string; location: string }> | null,
+  notes: string[]
+): Promise<{ events: NewResultEvent[]; inserted: number }> {
+  const events: NewResultEvent[] = [];
+  let inserted = 0;
+  if (!swimmers.length) return { events, inserted };
+  const today = pragueToday();
+  const { data: ents } = await db()
+    .from("swim_entries")
+    .select("competition_csps_id,swimmer_id")
+    .in("swimmer_id", swimmers.map((s) => s.id))
+    .gte("swim_date", addDays(today, -10))
+    .lte("swim_date", today);
+  const byMeet = new Map<number, Set<string>>();
+  for (const e of ents ?? []) {
+    const cid = Number(e.competition_csps_id);
+    if (!byMeet.has(cid)) byMeet.set(cid, new Set());
+    byMeet.get(cid)!.add(e.swimmer_id as string);
+  }
+  for (const [cid, ids] of byMeet) {
+    const { data: have } = await db().from("swim_results").select("swimmer_id").eq("competition_csps_id", cid).eq("source", "csps");
+    const missing = swimmers.filter((s) => ids.has(s.id) && !(have ?? []).some((h) => h.swimmer_id === s.id));
+    if (!missing.length) continue;
+    let docs: csps.CspsCompetitionDocs;
+    try {
+      docs = await csps.getCompetitionDocs(cid);
+    } catch (e) {
+      notes.push(`lenex docs ${cid}: ${(e as Error).message}`);
+      continue;
+    }
+    const lx = await loadLenex(cid, docs.documents, notes);
+    if (!lx?.pool) continue;
+    const comp = titleMap?.get(cid);
+    for (const s of missing) {
+      const mine = lx.results.filter((r) => r.license === s.csps_user_id && r.status !== "DNS" && r.status !== "WDR" && (r.ms != null || r.status === "DSQ"));
+      if (!mine.length) continue;
+      const { data: existing } = await db().from("swim_results").select("discipline,pool_length,time_ms,swim_date,is_split").eq("swimmer_id", s.id);
+      const known = new Set((existing ?? []).map((r) => `${r.discipline}|${r.pool_length}|${r.swim_date}|${r.time_ms}|${r.is_split}`));
+      const pbBefore = new Map<string, number>();
+      for (const r of existing ?? []) {
+        if (r.is_split || r.time_ms >= csps.DSQ_THRESHOLD) continue;
+        const k = `${r.discipline}|${r.pool_length}`;
+        if (!pbBefore.has(k) || r.time_ms < pbBefore.get(k)!) pbBefore.set(k, r.time_ms);
+      }
+      const rows = mine.flatMap((r) => [
+        { discipline: `${r.distance} ${r.stroke}`, time_ms: r.ms ?? DSQ_MS, is_dsq: r.ms == null, is_split: false, points: r.points, swim_date: r.date },
+        // splits at standard distances count like CSPS splits (not in medley: half a medley is not a medley)
+        ...(r.stroke === "O"
+          ? []
+          : r.splits
+              .filter((sp) => SPLIT_DISTANCES.has(sp.distance) && sp.distance < r.distance)
+              .map((sp) => ({ discipline: `${sp.distance} ${r.stroke}`, time_ms: sp.ms, is_dsq: false, is_split: true, points: null, swim_date: r.date }))),
+      ]);
+      for (const row of rows) {
+        const key = `${row.discipline}|${lx.pool}|${row.swim_date}|${row.time_ms}|${row.is_split}`;
         if (known.has(key)) continue;
-        const isDsq = r.time >= csps.DSQ_THRESHOLD;
-        const comp = titleMap?.get(r.competitionId);
         const { error } = await db().from("swim_results").insert({
           swimmer_id: s.id,
-          discipline: disc,
-          pool_length: pool,
-          time_ms: r.time,
-          is_dsq: isDsq,
-          is_split: r.splitTime,
-          points: pointsByKey.get(`${disc}|${pool}|${date}|${r.time}`) ?? null,
-          swim_date: date,
-          competition_csps_id: r.competitionId,
+          ...row,
+          pool_length: lx.pool,
+          competition_csps_id: cid,
           competition_title: comp?.title ?? null,
-          location: r.location,
+          location: comp?.location ?? lx.city,
+          source: "lenex",
         });
-        if (error && !error.message.includes("duplicate")) throw error;
+        if (error && !error.message.includes("duplicate")) {
+          notes.push(`lenex ${cid}: ${error.message}`);
+          continue;
+        }
         known.add(key);
         inserted += 1;
-        if (!isBackfill && !r.splitTime && !isDsq) {
-          const k = `${disc}|${pool}`;
-          const prev = pbBefore.get(k) ?? null;
-          events.push({
-            swimmer: s, discipline: disc, pool, timeMs: r.time, date,
-            location: r.location, isPB: prev === null || r.time < prev, prevPbMs: prev, isDsq,
-          });
-          if (prev === null || r.time < prev) pbBefore.set(k, r.time);
-        }
+        if (row.is_split || row.is_dsq) continue;
+        const k = `${row.discipline}|${lx.pool}`;
+        const prev = pbBefore.get(k) ?? null;
+        events.push({ swimmer: s, discipline: row.discipline, pool: lx.pool, timeMs: row.time_ms, date: row.swim_date, location: comp?.location ?? lx.city, isPB: prev === null || row.time_ms < prev, prevPbMs: prev, isDsq: false });
+        if (prev === null || row.time_ms < prev) pbBefore.set(k, row.time_ms);
       }
     }
   }

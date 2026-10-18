@@ -34,6 +34,7 @@ import {
   type StatusInputs,
 } from "./entries";
 import { addDays, pragueNow, pragueToday } from "./time";
+import { lenexOutputs, readLenex, type Lenex } from "./lenex";
 
 // Documents worth showing in the app (organiser PDFs); technical exports stay hidden.
 const DOC_LABELS: Record<string, string> = {
@@ -63,12 +64,36 @@ interface DocBundle {
   accepted: { map: Map<string, DocEntry[]>; date: string | null } | null;
   omega: OmegaRow[] | null;
   startPdf: { map: Map<string, Map<number, DocStatus>>; date: string | null } | null;
+  lenex: Lenex | null;
 }
 
-const NO_DOCS: DocBundle = { accepted: null, omega: null, startPdf: null };
+const NO_DOCS: DocBundle = { accepted: null, omega: null, startPdf: null, lenex: null };
+
+// The organiser's LENEX results, parsed once per run (results import and placings both use it).
+const lenexCache = new Map<string, Promise<Lenex | null>>();
+export function loadLenex(cid: number, docs: csps.CspsDocument[], notes: string[]): Promise<Lenex | null> {
+  const doc = docs.find((d) => d.type === "C_FILE_LENEX_RESULTS");
+  if (!doc) return Promise.resolve(null);
+  const k = `${cid}|${doc.fileName}`;
+  if (!lenexCache.has(k)) {
+    lenexCache.set(
+      k,
+      csps
+        .downloadDocument(cid, doc)
+        .then((buf) => (buf ? readLenex(buf) : null))
+        .catch((e: Error) => {
+          notes.push(`lenex ${cid}: ${e.message}`);
+          lenexCache.delete(k);
+          return null;
+        })
+    );
+    setTimeout(() => lenexCache.delete(k), 10 * 60_000).unref?.();
+  }
+  return lenexCache.get(k)!;
+}
 
 async function loadDocs(cid: number, docs: csps.CspsDocument[], keys: Set<string>, notes: string[]): Promise<DocBundle> {
-  const out: DocBundle = { accepted: null, omega: null, startPdf: null };
+  const out: DocBundle = { accepted: null, omega: null, startPdf: null, lenex: await loadLenex(cid, docs, notes) };
   const find = (type: string) => docs.find((d) => d.type === type);
   const omegaDoc = find("START_LIST_CSV");
   if (omegaDoc) {
@@ -443,7 +468,9 @@ export async function scanEntries(opts: ScanOptions = {}): Promise<{ competition
           outputsByCat.set(p.catId, []);
         }
       }
-      const outs = outputsByCat.get(p.catId)!;
+      // CSPS imports results days after the meet; until then the organiser's LENEX file has the same results
+      let outs: csps.OwOutput[] = outputsByCat.get(p.catId)!;
+      if (!outs.length && bundle.lenex) outs = lenexOutputs(bundle.lenex, p.eventNo, csps.DSQ_THRESHOLD + 39_990);
       if (!outs.length) continue;
       const valid = outs.filter((o) => o.order > 0 && o.time > 0 && o.time < csps.DSQ_THRESHOLD);
       const me = valid.find((o) => o.userId === p.swimmer.csps_user_id);

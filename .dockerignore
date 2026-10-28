@@ -1,0 +1,14 @@
+# Docker build context: everything the build and the app need, minus local state.
+.git
+.github
+.claude
+.vscode
+.DS_Store
+**/.DS_Store
+node_modules
+.next
+out
+*.tsbuildinfo
+.env*
+!.env.example
+*.pem

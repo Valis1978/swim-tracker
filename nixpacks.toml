@@ -1,0 +1,8 @@
+# Coolify builds this app with Nixpacks 1.41.0, which installs Node.js from its
+# built-in nixpkgs revision (ffeebf0a…): Node.js 22.11.0 without the 2025–2026
+# security fixes (Brotli RCE CVE-2026-111497 is fixed in 22.23.4).
+# Pin a nixos-26.05 revision instead: nodejs_22 there is 22.23.4.
+# To pick up a later Node.js release, move this to a newer nixos-26.05 commit
+# and check `node -v` in the running container after the deploy.
+[phases.setup]
+nixpkgsArchive = "1f607aa79b6356ed45d3cd3c8079c196e79efa2c"
